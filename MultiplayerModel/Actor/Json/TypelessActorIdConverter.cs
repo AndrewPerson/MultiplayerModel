@@ -8,7 +8,7 @@ public class TypelessActorIdConverter : JsonConverter<TypelessActorId>
     public override TypelessActorId Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         uint? containerId = null;
-        Guid? localId = null;
+        ulong? localId = null;
 
         while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
@@ -26,8 +26,7 @@ public class TypelessActorIdConverter : JsonConverter<TypelessActorId>
                 else if (propertyName == "LocalId")
                 {
                     if (localId is not null) throw new JsonException();
-                    localId = ((JsonConverter<Guid>)options.GetConverter(typeof(Guid)))
-                        .Read(ref reader, typeof(Guid), options);
+                    localId = reader.GetUInt64();
                 }
                 else
                 {
@@ -53,9 +52,7 @@ public class TypelessActorIdConverter : JsonConverter<TypelessActorId>
         writer.WriteStartObject();
 
         writer.WriteNumber("ContainerId", value.ContainerId);
-
-        writer.WritePropertyName("LocalId");
-        ((JsonConverter<Guid>)options.GetConverter(typeof(Guid))).Write(writer, value.LocalId, options);
+        writer.WriteNumber("LocalId", value.LocalId);
 
         writer.WriteEndObject();
     }
@@ -67,7 +64,7 @@ public class TypelessActorIdConverter : JsonConverter<TypelessActorId>
         if (propertyName.Split(':') is [var containerIdString, var localIdString])
         {
             if (uint.TryParse(containerIdString, out var containerId)
-                && Guid.TryParse(localIdString, out var localid))
+                && ulong.TryParse(localIdString, out var localid))
             {
                 return new(containerId, localid);
             }

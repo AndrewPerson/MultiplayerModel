@@ -6,14 +6,14 @@ public class RpcMessageIdGenerator : ISimpleMessageIdGenerator
 {
     public uint DefaultContainerId { get; set; }
 
-    private readonly RpcGuidGenerator generator = new();
+    private readonly RpcIdGenerator generator = new();
 
     public RpcMessageIdGenerator(uint defaultContainerId)
     {
         DefaultContainerId = defaultContainerId;
     }
     
-    private RpcMessageIdGenerator(uint defaultContainerId, RpcGuidGenerator generator) : this(defaultContainerId)
+    private RpcMessageIdGenerator(uint defaultContainerId, RpcIdGenerator generator) : this(defaultContainerId)
     {
         this.generator = generator;
     }

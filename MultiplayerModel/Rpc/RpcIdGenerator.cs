@@ -2,15 +2,15 @@ using MultiplayerModel.Extension;
 
 namespace MultiplayerModel.Rpc;
 
-public class RpcGuidGenerator
+public class RpcIdGenerator
 {
     private readonly Dictionary<uint, ulong> clientCounters = [];
 
-    public RpcGuidGenerator()
+    public RpcIdGenerator()
     {
     }
 
-    private RpcGuidGenerator(Dictionary<uint, ulong> clientCounters)
+    private RpcIdGenerator(Dictionary<uint, ulong> clientCounters)
     {
         this.clientCounters = clientCounters;
     }
@@ -28,8 +28,18 @@ public class RpcGuidGenerator
 
         return guid;
     }
+    
+    public ulong NextULong(uint clientId)
+    {
+        if (!clientCounters.TryGetValue(clientId, out var counter))
+        {
+            counter = 0;
+        }
 
-    public RpcGuidGenerator Clone()
+        return clientCounters[clientId] = ++counter;
+    }
+
+    public RpcIdGenerator Clone()
     {
         return new(new(clientCounters));
     }

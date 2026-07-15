@@ -251,11 +251,11 @@ public class DefaultServerTransport : IServerTransport
             return;
         }
 
-        if (!Guid.TryParse(localIdString, out var localId))
+        if (!ulong.TryParse(localIdString, out var localId))
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
             context.Response.OutputStream.Write(Encoding.Default.GetBytes("Invalid Local ID"));
-            logger.LogDebug("Invalid message request because {localId} is not a guid", localIdString);
+            logger.LogDebug("Invalid message request because {localId} is not a ulong", localIdString);
             return;
         }
 
@@ -294,11 +294,11 @@ public class DefaultServerTransport : IServerTransport
             return;
         }
 
-        if (!Guid.TryParse(localIdString, out var localId))
+        if (!ulong.TryParse(localIdString, out var localId))
         {
             context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
             context.Response.OutputStream.Write(Encoding.Default.GetBytes("Invalid Local ID"));
-            logger.LogDebug("Invalid message request because {localId} is not a guid", localIdString);
+            logger.LogDebug("Invalid message request because {localId} is not a ulong", localIdString);
             return;
         }
 
