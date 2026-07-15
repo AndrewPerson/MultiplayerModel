@@ -2,11 +2,15 @@
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using ConsoleChat;
+using Microsoft.Extensions.Logging;
 using MultiplayerModel.Actor;
 using MultiplayerModel.Rpc;
 using MultiplayerModel.Serialisation;
 using MultiplayerModel.Serialisation.Json;
 using MultiplayerModel.Transport.Default;
+
+using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+var logger = loggerFactory.CreateLogger("Log");
 
 Console.Write("Host session? (y/n) ");
 var host = Console.ReadKey().Key == ConsoleKey.Y;
@@ -50,7 +54,8 @@ if (host)
     var serverTransport = new DefaultServerTransport(
         ["http://localhost:8000/"],
         actorJsonSerialisationOpts,
-        messageJsonSerialisationOpts
+        messageJsonSerialisationOpts,
+        logger
     );
 
     actorContainer = new RpcServerActorContainer(serverTransport);
@@ -66,13 +71,21 @@ else
     var clientTransport = await DefaultClientTransport.Create(
         new("http://localhost:8000/"),
         actorJsonSerialisationOpts,
-        messageJsonSerialisationOpts
+        messageJsonSerialisationOpts,
+        logger
     );
 
     actorContainer = new RpcClientActorContainer(clientTransport);
 }
 
-_ = actorContainer.Run();
+_ = actorContainer.Run().ContinueWith(t =>
+{
+    Console.WriteLine("Stopped running");
+    if (t.IsFaulted)
+    {
+        Console.WriteLine(t.Exception);
+    }
+});
 
 await Task.Delay(1000);
 
@@ -90,6 +103,8 @@ while (true)
     {
         chat = chat.SendMessage(actorContainer, new Message(username, message));
     }
+
+    chat = actorContainer.GetActor(chat.Id);
     
     Console.Clear();
     foreach (var chatMessage in chat.Messages.TakeLast(10))

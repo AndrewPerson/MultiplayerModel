@@ -36,6 +36,11 @@ public readonly partial record struct Chat(
         return this with { Messages = Messages.Add(message) };
     }
 
+    public override string ToString()
+    {
+        return $"Chat {{ Id = {Id}, Messages = [{string.Join(", ", Messages.Select(m => m.ToString()))}], ClientUsernames = {ClientUsernames} }}";
+    }
+
     public int StableHash()
     {
         return 0; // TODO
