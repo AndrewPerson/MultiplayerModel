@@ -112,6 +112,8 @@ public class DefaultClientTransport : IClientTransport
                 logger.LogDebug("Received ordering {ordering}", ordering.Data);
                 messageOrderings.Post(ordering.Data);
             }
+            
+            logger.LogDebug("SSE connection to server closed.");
 
             runningCancellationToken.ThrowIfCancellationRequested();
             runningCanceller.Cancel();

@@ -67,7 +67,7 @@ public interface IActorContainer
      */
     public bool TryGetActor(IActorId id, [MaybeNullWhen(false)] out IActor actor);
     
-    public void AddActor<T>(ITypedActor<T> actor) where T : struct, ITypedActor<T>;
+    public void AddActor<T>(in T actor) where T : struct, ITypedActor<T>;
     
     public T RemoveActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>;
     public bool TryRemoveActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>;

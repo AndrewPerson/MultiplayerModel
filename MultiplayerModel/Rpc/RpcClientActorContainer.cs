@@ -264,7 +264,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         return false;
     }
 
-    public void AddActor<T>(ITypedActor<T> actor) where T : struct, ITypedActor<T>
+    public void AddActor<T>(in T actor) where T : struct, ITypedActor<T>
     {
         using (actorsLock.EnterWriteScope())
         {
@@ -304,15 +304,16 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
     private void ApplyMessageOrdering(MessageOrdering ordering)
     {
-        using (actorsLock.EnterUpgradeableReadScope())
+        // Dictionary<MessageId, (int Index, (TypelessActorId, IMessage) Item)> unackedMessagesDict;
+        using (actorsLock.EnterWriteScope())
         {
+            var ackedMessages = ordering.Ordering;
+            
             var unackedMessagesDict = unackedChangesContainer.AppliedMessages
                 .Index().ToDictionary(x => x.Item.Item2.Id);
 
             unackedChangesContainer.ReCreate();
-
-            var ackedMessages = ordering.Ordering;
-
+            
             var ackedChangesContainer = new ChangeCalculationActorContainer(this);
             for (int i = 0; i < ackedMessages.Count; i++)
             {
@@ -321,9 +322,9 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
                 unackedMessagesDict.Remove(message.Id);
             }
-
+            
             ackedChangesContainer.ApplyTo(actors);
-
+            
             foreach (var (id, actor) in ackedChangesContainer.DirtyActors)
             {
                 if (!ordering.ActorHashes.TryGetValue(id, out var correctHash))
@@ -341,7 +342,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
                     DownloadActor(id);
                 }
             }
-
+            
             foreach (var (id, _) in ordering.ActorHashes)
             {
                 if (!ackedChangesContainer.DirtyActors.ContainsKey(id))
@@ -349,7 +350,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
                     DownloadActor(id);
                 }
             }
-
+            
             var unackedMessages = unackedMessagesDict.Values.OrderBy(x => x.Index).Select(x => x.Item).ToList();
             for (int i = 0; i < unackedMessages.Count; i++)
             {
@@ -376,19 +377,15 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
                 Transport.DownloadActor(id).ContinueWith(t =>
                 {
+                    tcs.SetFromTask(t);
                     using (actorsLock.EnterWriteScope())
                     {
                         if (t.IsCompletedSuccessfully)
                         {
                             actors[id] = t.Result;
-                            tcs.SetFromTask(t);
-                            actorDownloads.Remove(id);
                         }
-                        else
-                        {
-                            tcs.SetFromTask(t);
-                            backgroundTaskCanceller?.Cancel();
-                        }
+
+                        actorDownloads.Remove(id);
                     }
                 });
             }

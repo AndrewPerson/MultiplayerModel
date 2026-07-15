@@ -58,29 +58,22 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
                 {
                     var sleepTask = Task.Delay(100, backgroundCancellationToken);
 
-                    List<(TypelessActorId, IMessage)>? appliedMessages = null;
-                    Dictionary<TypelessActorId, int?>? dirtyActorHashes = null;
+                    List<(TypelessActorId, IMessage)> appliedMessages;
+                    Dictionary<TypelessActorId, int?> dirtyActorHashes;
 
-                    await Task.Run(() =>
+                    using (actorsLock.EnterWriteScope())
                     {
-                        using (actorsLock.EnterUpgradeableReadScope())
-                        {
-                            appliedMessages = nextMessageOrderingContainer.AppliedMessages.ToList();
-                            dirtyActorHashes = nextMessageOrderingContainer.DirtyActors.ToDictionary(
-                                kv => kv.Key,
-                                kv => kv.Value?.StableHash()
-                            );
+                        appliedMessages = nextMessageOrderingContainer.AppliedMessages.ToList();
+                        dirtyActorHashes = nextMessageOrderingContainer.DirtyActors.ToDictionary(
+                            kv => kv.Key,
+                            kv => kv.Value?.StableHash()
+                        );
 
-                            using (actorsLock.EnterWriteScope())
-                            {
-                                nextMessageOrderingContainer.ApplyTo(actors);
-                                nextMessageOrderingContainer.ReCreate();
-                            }
-                        }
-                    }, backgroundCancellationToken);
+                        nextMessageOrderingContainer.ApplyTo(actors);
+                        nextMessageOrderingContainer.ReCreate();
+                    }
 
-                    if (appliedMessages is not null && dirtyActorHashes is not null &&
-                        (appliedMessages.Count != 0 || dirtyActorHashes.Count != 0))
+                    if (appliedMessages.Count != 0 || dirtyActorHashes.Count != 0)
                     {
                         await Transport.SendMessageOrdering
                         (
@@ -252,7 +245,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         return false;
     }
 
-    public void AddActor<T>(ITypedActor<T> actor) where T : struct, ITypedActor<T>
+    public void AddActor<T>(in T actor) where T : struct, ITypedActor<T>
     {
         using (actorsLock.EnterWriteScope())
         {

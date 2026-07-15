@@ -180,11 +180,15 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
             var newActor = actor.ProcessMessage(this, ref message);
             dirtyActors[new(actorId)] = newActor;
 
+            appliedMessages.Add((new(actorId), message));
+            
             return newActor;
         }
-        
-        appliedMessages.Add((new(actorId), message));
-        return null;
+        else
+        {
+            appliedMessages.Add((new(actorId), message));
+            return null;
+        }
     }
 
     /**
@@ -203,12 +207,16 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
         {
             var newActor = message.TryDispatch(this, actor);
             dirtyActors[new(actorId)] = newActor;
+            
+            appliedMessages.Add((new(actorId), message));
 
             return newActor;
         }
-
-        appliedMessages.Add((new(actorId), message));
-        return null;
+        else
+        {
+            appliedMessages.Add((new(actorId), message));
+            return null;
+        }
     }
 
     /**
@@ -294,7 +302,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * new actors added are wholly new and not used anywhere else, meaning they need to be cloned to be isolated.
      * </remarks>
      */
-    public void AddActor<T>(ITypedActor<T> actor) where T : struct, ITypedActor<T>
+    public void AddActor<T>(in T actor) where T : struct, ITypedActor<T>
     {
         dirtyActors.Add(new(actor.Id), actor);
     }
