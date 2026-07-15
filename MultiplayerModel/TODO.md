@@ -1,0 +1,15 @@
+- [ ] Add versioning to actors when downloading, to prevent a race condition when the server doesn't receive the client's request to download until after it has sent out the latest batch of messages and applied them to the server-side actors.
+  - This doesn't need to be super well implemented, i.e. the default server implementation probably won't keep versioned copies of the actors around, instead it will just keep track of the current version and say the actor is missing if the versions don't line up.
+- [ ] Add predicted messages
+  - These messages are not sent to the server, instead they are applied immediately on the client, in the expectation that the same message will arrive from the server in a certain amount of time (or the next message batch? this might be more realistic to implement).
+    - If the message isn't received within the timeout, it is rolled back.
+    - Should this timeout be configurable?
+- [ ] Add JSON serialisation helpers for actors and messages
+  - Mostly around polymorphic serialisation. There needs to be a way for actors and messages to register themselves at runtime.
+- [ ] Add non-deterministic messages
+  - These are messages that have a non-deterministic part (i.e. random roll) that is only calculated on the server
+  - This is implemented through having the message split into a deterministic/non-deterministic part, with the server modifying the non-deterministic part when it receives the message, and then applying and sending out the modified message.
+  - The infrastructure is mostly there for this, i.e. it's why all messages are passed by ref, but it currently requires too much boilerplate, and it's not clear how the source generator for it would work
+    - You would need at least 2 functions to be provided, one to generate the non-deterministic payload and then one to actually apply the message
+- [ ] Add observables for actors
+  - Would probably require integration in ChangeCalculationActorContainer?

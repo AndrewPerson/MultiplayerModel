@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>14</LangVersion>
+        <IsRoslynComponent>true</IsRoslynComponent>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <RootNamespace>MultiplayerModel.Generators.Actor</RootNamespace>
+        <AssemblyName>Actor</AssemblyName>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <PackageId>MultiplayerModel.Generators.Actor</PackageId>
+        <Version>0.0.46</Version>
+        <Authors>AP2</Authors>
+        <PackageProjectURL>https://github.com/AndrewPerson/MultiplayerModel</PackageProjectURL>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/AndrewPerson/MultiplayerModel</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
+        <PackageReference Include="SourceGenUtils" Version="0.0.20" PrivateAssets="all" GeneratePathProperty="true" />
+        <None Include="$(PkgSourceGenUtils)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Package the generator in the analyzer directory of the nuget package -->
+        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="README.md" Pack="true" PackagePath="/"/>
+    </ItemGroup>
+</Project>

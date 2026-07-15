@@ -1,0 +1,334 @@
+using System.Diagnostics.CodeAnalysis;
+using MultiplayerModel.Actor;
+using MultiplayerModel.Extension;
+using MultiplayerModel.Transport.Server;
+using MultiplayerModel.Transport.Shared;
+
+namespace MultiplayerModel.Rpc;
+
+/**
+ * <remarks>
+ * All methods on this class are thread-safe, although they may not be very efficient in their thread-safety.
+ * </remarks>
+ */
+public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, IActorDownloadHandler, IDisposable
+{
+    public uint Id => 0;
+
+    public RpcActorIdGenerator ActorIdGenerator { get; } = new(0);
+    public RpcMessageIdGenerator MessageIdGenerator { get; } = new(0);
+
+    public IServerTransport Transport { get; }
+
+    private readonly ReaderWriterLockSlim actorsLock = new(LockRecursionPolicy.SupportsRecursion);
+    private readonly Dictionary<TypelessActorId, IActor> actors = [];
+
+    private readonly ChangeCalculationActorContainer nextMessageOrderingContainer;
+    private long messageOrderingVersion;
+
+    private CancellationTokenSource? backgroundTaskCanceller;
+    private bool running;
+
+    private bool disposedValue;
+
+    public RpcServerActorContainer(IServerTransport transport)
+    {
+        Transport = transport;
+        transport.ListActorsHandler = this;
+        transport.DownloadHandler = this;
+
+        nextMessageOrderingContainer = new(this);
+    }
+
+    public async Task Run(CancellationToken cancellationToken = default)
+    {
+        if (Interlocked.Exchange(ref running, true))
+        {
+            throw new InvalidOperationException($"{nameof(RpcServerActorContainer)} is already running.");
+        }
+
+        try
+        {
+            backgroundTaskCanceller = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            var backgroundCancellationToken = backgroundTaskCanceller.Token;
+
+            async Task MessageOrdering()
+            {
+                while (!backgroundCancellationToken.IsCancellationRequested)
+                {
+                    var sleepTask = Task.Delay(100, backgroundCancellationToken);
+
+                    List<(TypelessActorId, IMessage)>? appliedMessages = null;
+                    Dictionary<TypelessActorId, int?>? dirtyActorHashes = null;
+
+                    await Task.Run(() =>
+                    {
+                        using (actorsLock.EnterUpgradeableReadScope())
+                        {
+                            appliedMessages = nextMessageOrderingContainer.AppliedMessages.ToList();
+                            dirtyActorHashes = nextMessageOrderingContainer.DirtyActors.ToDictionary(
+                                kv => kv.Key,
+                                kv => kv.Value?.StableHash()
+                            );
+
+                            using (actorsLock.EnterWriteScope())
+                            {
+                                nextMessageOrderingContainer.ApplyTo(actors);
+                                nextMessageOrderingContainer.ReCreate();
+                            }
+                        }
+                    }, backgroundCancellationToken);
+
+                    if (appliedMessages is not null && dirtyActorHashes is not null &&
+                        (appliedMessages.Count != 0 || dirtyActorHashes.Count != 0))
+                    {
+                        await Transport.SendMessageOrdering
+                        (
+                            appliedMessages.Select(tup => new AddressedMessage(tup.Item1, tup.Item2)).ToList(),
+                            dirtyActorHashes,
+                            Interlocked.Increment(ref messageOrderingVersion) - 1, // We want the value pre-increment
+                            backgroundCancellationToken
+                        );
+                    }
+
+                    await sleepTask;
+                }
+
+                backgroundCancellationToken.ThrowIfCancellationRequested();
+            }
+
+            async Task ReceiveMessages()
+            {
+                while (!backgroundCancellationToken.IsCancellationRequested)
+                {
+                    var (actorId, message) = await Transport.ReceiveMessage(backgroundCancellationToken);
+                    SendMessage(actorId, message);
+                }
+
+                backgroundCancellationToken.ThrowIfCancellationRequested();
+            }
+
+            await await Task.WhenAny(Transport.Run(backgroundCancellationToken), MessageOrdering(), ReceiveMessages());
+        }
+        finally
+        {
+            backgroundTaskCanceller?.Cancel();
+            Interlocked.Exchange(ref running, false);
+        }
+    }
+
+    public T? SendMessage<T, TMessage>(IActorId<T> actorId, TMessage message)
+        where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
+    {
+        using (actorsLock.EnterWriteScope())
+        {
+            return nextMessageOrderingContainer.SendMessage(actorId, message);
+        }
+    }
+
+    public IActor? SendMessage(IActorId actorId, IMessage message)
+    {
+        using (actorsLock.EnterWriteScope())
+        {
+            return nextMessageOrderingContainer.SendMessage(actorId, message);
+        }
+    }
+
+    public IReadOnlySet<TypelessActorId> ListActors()
+    {
+        using (actorsLock.EnterReadScope())
+        {
+            var result = actors.Keys.ToHashSet();
+            result.UnionWith(nextMessageOrderingContainer.DirtyActors.Keys);
+
+            return result;
+        }
+    }
+
+    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : struct, ITypedActor<T>
+    {
+        using (actorsLock.EnterReadScope())
+        {
+            var result = actors
+                .Where(kv => kv.Value is T)
+                .Select(kv => new ActorId<T>(kv.Key.ContainerId, kv.Key.LocalId))
+                .ToHashSet();
+
+            result.UnionWith(
+                nextMessageOrderingContainer.DirtyActors
+                    .Where(kv => kv.Value is T)
+                    .Select(kv => new ActorId<T>(kv.Key.ContainerId, kv.Key.LocalId))
+            );
+
+            return result;
+        }
+    }
+
+    public bool ContainsActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    {
+        using (actorsLock.EnterReadScope())
+        {
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out var unackedActor))
+            {
+                if (unackedActor is T) return true;
+                if (unackedActor is null) return false; // A null value means the actor has been removed
+            }
+
+            return actors.TryGetValue(new(id), out var actor) && actor is T;
+        }
+    }
+
+    public bool ContainsActor(IActorId id)
+    {
+        using (actorsLock.EnterReadScope())
+        {
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out var actor))
+            {
+                return actor is not null;
+            }
+
+            return actors.ContainsKey(new(id));
+        }
+    }
+
+    public T GetActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    {
+        if (TryGetActor(id, out var actor))
+        {
+            return actor;
+        }
+
+        throw new KeyNotFoundException();
+    }
+
+    public bool TryGetActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    {
+        using (actorsLock.EnterReadScope())
+        {
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out var untypedUnackedActor))
+            {
+                // A null value means the actor has been removed
+                if (untypedUnackedActor is null)
+                {
+                    actor = default;
+                    return false;
+                }
+
+                if (untypedUnackedActor is T typedUnackedActor)
+                {
+                    actor = typedUnackedActor;
+                    return true;
+                }
+            }
+
+            if (actors.TryGetValue(new(id), out var untypedActor) && untypedActor is T typedActor)
+            {
+                actor = typedActor;
+                return true;
+            }
+        }
+
+        actor = default;
+        return false;
+    }
+
+    public bool TryGetActor(IActorId id, [MaybeNullWhen(false)] out IActor actor)
+    {
+        using (actorsLock.EnterReadScope())
+        {
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out actor))
+            {
+                // A null value means the actor has been removed
+                return actor is not null;
+            }
+
+            if (actors.TryGetValue(new(id), out actor))
+            {
+                return true;
+            }
+        }
+
+        actor = null;
+        return false;
+    }
+
+    public void AddActor<T>(ITypedActor<T> actor) where T : struct, ITypedActor<T>
+    {
+        using (actorsLock.EnterWriteScope())
+        {
+            actors.Add(new(actor.Id), actor);
+        }
+    }
+
+    public T RemoveActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    {
+        if (TryRemoveActor(id, out var actor))
+        {
+            return actor;
+        }
+
+        throw new KeyNotFoundException();
+    }
+
+    public bool TryRemoveActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    {
+        using (actorsLock.EnterWriteScope())
+        {
+            if (nextMessageOrderingContainer.TryRemoveActor(id, out actor))
+            {
+                actors.Remove(new(id));
+                return true;
+            }
+
+            if (TryGetActor(id, out actor))
+            {
+                actors.Remove(new(actor.Id));
+                return true;
+            }
+
+            return false;
+        }
+    }
+
+    IActor? IActorDownloadHandler.GetActorForDownload(TypelessActorId actorId)
+    {
+        using (actorsLock.EnterReadScope())
+        {
+            if (actors.TryGetValue(actorId, out var actor))
+            {
+                return actor;
+            }
+        }
+
+        return null;
+    }
+
+    private void Dispose(bool disposing)
+    {
+        if (!disposedValue)
+        {
+            if (disposing)
+            {
+                backgroundTaskCanceller?.Dispose();
+                actorsLock.Dispose();
+            }
+
+            Transport.Dispose();
+
+            disposedValue = true;
+        }
+    }
+
+    ~RpcServerActorContainer()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: false);
+    }
+
+    public void Dispose()
+    {
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+}
