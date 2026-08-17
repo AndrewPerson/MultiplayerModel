@@ -4,6 +4,9 @@
   - These messages are not sent to the server, instead they are applied immediately on the client, in the expectation that the same message will arrive from the server in a certain amount of time (or the next message batch? this might be more realistic to implement).
     - If the message isn't received within the timeout, it is rolled back.
     - Should this timeout be configurable?
+- [ ] Handle reconnection for the SSE message ordering stream in `DefaultClientTransport`
+  - Currently, if the SSE connection to the server drops, `Run` just terminates and the client container stops running entirely.
+  - On reconnect it should probably also resync state (re-list/download actors), since orderings sent while disconnected were missed.
 - [x] Add JSON serialisation helpers for actors and messages
   - Mostly around polymorphic serialisation. There needs to be a way for actors and messages to register themselves at runtime.
 - [ ] Add non-deterministic messages

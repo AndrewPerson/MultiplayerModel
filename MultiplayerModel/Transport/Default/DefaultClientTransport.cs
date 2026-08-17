@@ -71,8 +71,7 @@ public class DefaultClientTransport : IClientTransport
         listActorsUri = new UriBuilder(serverUri) { Path = "actors" }.Uri;
         downloadActorBaseUri = new UriBuilder(serverUri) { Path = "actors" }.Uri;
         sendMessageBaseUri = new UriBuilder(serverUri) { Path = "actors" }.Uri;
-        receiveMessageOrderingUri =
-            new UriBuilder(serverUri) { Scheme = "ws", Path = "ordering" }.Uri; // TODO Be able to configure ws vs wss
+        receiveMessageOrderingUri = new UriBuilder(serverUri) { Path = "ordering" }.Uri;
 
         this.messageSerialisationOptions = messageSerialisationOptions;
         this.actorSerialisationOptions = actorSerialisationOptions;

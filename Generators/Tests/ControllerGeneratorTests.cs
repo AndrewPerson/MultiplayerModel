@@ -67,7 +67,7 @@ public record struct Snapshot() : ISnapshot
             ]
         );
 
-        var generator = new ControllerGenerator();
+        var generator = new ActorGenerator();
 
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generator);
 

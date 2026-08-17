@@ -370,6 +370,13 @@ public class DefaultServerTransport : IServerTransport
             return false;
         }
 
+        if (id == 0)
+        {
+            id = uint.MaxValue;
+            logger.LogDebug("Invalid ID because 0 is the server's own ID");
+            return false;
+        }
+
         if (id < nextClientId)
         {
             return true;

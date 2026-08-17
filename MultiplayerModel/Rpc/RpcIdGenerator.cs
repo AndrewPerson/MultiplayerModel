@@ -36,7 +36,11 @@ public class RpcIdGenerator
             counter = 0;
         }
 
-        return clientCounters[clientId] = ++counter;
+        var localId = counter++;
+
+        clientCounters[clientId] = counter;
+
+        return localId;
     }
 
     public RpcIdGenerator Clone()

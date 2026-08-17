@@ -3,6 +3,9 @@
 ##
 ## Get latest from `dotnet new gitignore`
 
+.mcp.json
+NOTES.md
+
 # dotenv files
 .env
 

@@ -10,7 +10,7 @@ using IndentedTextWriter = SourceGenUtils.IndentedTextWriter;
 namespace MultiplayerModel.Generators.Actor;
 
 [Generator(LanguageNames.CSharp)]
-public class ControllerGenerator : IIncrementalGenerator
+public class ActorGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
