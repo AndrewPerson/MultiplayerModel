@@ -4,7 +4,7 @@
   - These messages are not sent to the server, instead they are applied immediately on the client, in the expectation that the same message will arrive from the server in a certain amount of time (or the next message batch? this might be more realistic to implement).
     - If the message isn't received within the timeout, it is rolled back.
     - Should this timeout be configurable?
-- [ ] Add JSON serialisation helpers for actors and messages
+- [x] Add JSON serialisation helpers for actors and messages
   - Mostly around polymorphic serialisation. There needs to be a way for actors and messages to register themselves at runtime.
 - [ ] Add non-deterministic messages
   - These are messages that have a non-deterministic part (i.e. random roll) that is only calculated on the server
@@ -12,4 +12,8 @@
   - The infrastructure is mostly there for this, i.e. it's why all messages are passed by ref, but it currently requires too much boilerplate, and it's not clear how the source generator for it would work
     - You would need at least 2 functions to be provided, one to generate the non-deterministic payload and then one to actually apply the message
 - [ ] Add observables for actors
+  - Needs to produce Added, Updated, Removed events along with the new value of each actor (use null for when an actor is removed)
+    - Should properly batch events when doing things like applying messages from the server
+  - Should automatically dispose of observables for actors that are no longer being watched
+  - Should NOT dispose of observables for actors that have been removed as they can be re-added later
   - Would probably require integration in ChangeCalculationActorContainer?
