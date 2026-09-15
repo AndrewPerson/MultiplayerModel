@@ -39,6 +39,10 @@ public interface IActorContainer
      * other misc. processing may still occur, i.e. replicating the message in the case of
      * <see cref="RpcClientActorContainer"/>
      * </remarks>
+     *
+     * <returns>
+     * Null if no such actor exists, otherwise the value of the actor after the message has been applied
+     * </returns>
      */
     public IActor? SendMessage(IActorId actorId, IMessage message);
 

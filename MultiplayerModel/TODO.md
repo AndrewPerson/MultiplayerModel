@@ -14,7 +14,8 @@
   - This is implemented through having the message split into a deterministic/non-deterministic part, with the server modifying the non-deterministic part when it receives the message, and then applying and sending out the modified message.
   - The infrastructure is mostly there for this, i.e. it's why all messages are passed by ref, but it currently requires too much boilerplate, and it's not clear how the source generator for it would work
     - You would need at least 2 functions to be provided, one to generate the non-deterministic payload and then one to actually apply the message
-- [ ] Add observables for actors
+- [x] Add observables for actors
+  - Implemented as `IRpcActorContainer.Watch<T>(IActorId<T>)` returning `IObservable<T?>` (null = removed), backed by `ActorWatchRegistry` (push-based per-actor change aggregation, released per change batch).
   - Needs to produce Added, Updated, Removed events along with the new value of each actor (use null for when an actor is removed)
     - Should properly batch events when doing things like applying messages from the server
   - Should automatically dispose of observables for actors that are no longer being watched

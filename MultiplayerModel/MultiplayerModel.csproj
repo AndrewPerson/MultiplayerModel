@@ -15,7 +15,5 @@
   <ItemGroup>
     <PackageReference Include="JetBrains.Annotations" Version="2025.2.2" />
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.9" />
-    <PackageReference Include="System.Reactive" Version="6.0.1" />
-    <PackageReference Include="System.Reactive.Async" Version="6.0.0-alpha.18" />
   </ItemGroup>
 </Project>

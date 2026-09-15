@@ -22,6 +22,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
     private readonly ReaderWriterLockSlim actorsLock = new(LockRecursionPolicy.SupportsRecursion);
     private readonly Dictionary<TypelessActorId, IActor> actors = [];
+    private readonly ActorWatchRegistry actorWatchRegistry = new();
 
     private readonly ChangeCalculationActorContainer nextMessageOrderingContainer;
     private long messageOrderingVersion;
@@ -113,18 +114,40 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
     public T? SendMessage<T, TMessage>(IActorId<T> actorId, TMessage message)
         where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
     {
+        T? newActor;
+
         using (actorsLock.EnterWriteScope())
         {
-            return nextMessageOrderingContainer.SendMessage(actorId, message);
+            newActor = nextMessageOrderingContainer.SendMessage(actorId, message);
+
+            if (newActor is not null)
+            {
+                actorWatchRegistry.RecordChange(new TypelessActorId(actorId), newActor);
+            }
         }
+
+        actorWatchRegistry.ReleaseChanges();
+
+        return newActor;
     }
 
     public IActor? SendMessage(IActorId actorId, IMessage message)
     {
+        IActor? newActor;
+
         using (actorsLock.EnterWriteScope())
         {
-            return nextMessageOrderingContainer.SendMessage(actorId, message);
+            newActor = nextMessageOrderingContainer.SendMessage(actorId, message);
+
+            if (newActor is not null)
+            {
+                actorWatchRegistry.RecordChange(new TypelessActorId(actorId), newActor);
+            }
         }
+
+        actorWatchRegistry.ReleaseChanges();
+
+        return newActor;
     }
 
     public IReadOnlySet<TypelessActorId> ListActors()
@@ -155,6 +178,39 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
             return result;
         }
+    }
+
+    public IObservable<T?> Watch<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    {
+        var typelessId = new TypelessActorId(id);
+
+        return new DelegateObservable<T?>(observer =>
+        {
+            // Holding the read lock while subscribing orders the initial snapshot before any subsequently
+            // recorded changes, without comparing values.
+            using (actorsLock.EnterReadScope())
+            {
+                return actorWatchRegistry.Subscribe(typelessId, new TypedActorObserver<T>(observer), GetActorForWatch(typelessId));
+            }
+        });
+    }
+
+    /**
+     * Gets the effective value of an actor (pending changes preferred over committed ones) for use as a watch
+     * snapshot.
+     *
+     * <remarks>Must be called with the read lock held. In contrast to <see cref="TryGetActor"/>, this does not
+     * copy the actor into the pending container.</remarks>
+     */
+    private IActor? GetActorForWatch(TypelessActorId id)
+    {
+        if (nextMessageOrderingContainer.DirtyActors.TryGetValue(id, out var pendingActor))
+        {
+            // A null value means the actor has been removed.
+            return pendingActor;
+        }
+
+        return actors.GetValueOrDefault(id);
     }
 
     public bool ContainsActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
@@ -250,7 +306,10 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         using (actorsLock.EnterWriteScope())
         {
             actors.Add(new(actor.Id), actor);
+            actorWatchRegistry.RecordChange(new TypelessActorId(actor.Id), actor);
         }
+
+        actorWatchRegistry.ReleaseChanges();
     }
 
     public T RemoveActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
@@ -265,22 +324,33 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
     public bool TryRemoveActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
     {
+        bool removed = false;
+
         using (actorsLock.EnterWriteScope())
         {
             if (nextMessageOrderingContainer.TryRemoveActor(id, out actor))
             {
                 actors.Remove(new(id));
-                return true;
+                removed = true;
             }
-
-            if (TryGetActor(id, out actor))
+            else if (TryGetActor(id, out actor))
             {
                 actors.Remove(new(actor.Id));
-                return true;
+                removed = true;
             }
 
-            return false;
+            if (removed)
+            {
+                actorWatchRegistry.RecordChange(new TypelessActorId(id), null);
+            }
         }
+
+        if (removed)
+        {
+            actorWatchRegistry.ReleaseChanges();
+        }
+
+        return removed;
     }
 
     IActor? IActorDownloadHandler.GetActorForDownload(TypelessActorId actorId)
@@ -302,8 +372,9 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         {
             if (disposing)
             {
-                backgroundTaskCanceller?.Dispose();
+                backgroundTaskCanceller?.Cancel();
                 actorsLock.Dispose();
+                actorWatchRegistry.Dispose();
             }
 
             Transport.Dispose();

@@ -26,6 +26,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
     private readonly Dictionary<TypelessActorId, TaskCompletionSource<IActor>> actorDownloads = [];
     private readonly ChangeCalculationActorContainer unackedChangesContainer;
     private readonly Dictionary<TypelessActorId, IActor> actors = [];
+    private readonly ActorWatchRegistry actorWatchRegistry = new();
 
     private CancellationTokenSource? backgroundTaskCanceller;
     private bool running;
@@ -94,13 +95,22 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
     public T? SendMessage<T, TMessage>(IActorId<T> actorId, TMessage message)
         where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
     {
+        T? newActor;
+
         using (actorsLock.EnterWriteScope())
         {
-            var newActor = unackedChangesContainer.SendMessage(actorId, ref message);
+            newActor = unackedChangesContainer.SendMessage(actorId, ref message);
             Transport.SendMessage(actorId, message).ConfigureAwait(true);
 
-            return newActor;
+            if (newActor is not null)
+            {
+                actorWatchRegistry.RecordChange(new TypelessActorId(actorId), newActor);
+            }
         }
+
+        actorWatchRegistry.ReleaseChanges();
+
+        return newActor;
     }
 
     /**
@@ -113,13 +123,22 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
      */
     public IActor? SendMessage(IActorId actorId, IMessage message)
     {
+        IActor? newActor;
+
         using (actorsLock.EnterWriteScope())
         {
-            var newActor = unackedChangesContainer.SendMessage(actorId, ref message);
+            newActor = unackedChangesContainer.SendMessage(actorId, ref message);
             Transport.SendMessage(actorId, message).ConfigureAwait(true);
 
-            return newActor;
+            if (newActor is not null)
+            {
+                actorWatchRegistry.RecordChange(new TypelessActorId(actorId), newActor);
+            }
         }
+
+        actorWatchRegistry.ReleaseChanges();
+
+        return newActor;
     }
 
     public IReadOnlySet<TypelessActorId> ListActors()
@@ -153,6 +172,40 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
             return result;
         }
+    }
+
+    public IObservable<T?> Watch<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    {
+        var typelessId = new TypelessActorId(id);
+
+        return new DelegateObservable<T?>(observer =>
+        {
+            // Holding the read lock while subscribing orders the initial snapshot before any subsequently
+            // recorded changes, without comparing values.
+            using (actorsLock.EnterReadScope())
+            {
+                return actorWatchRegistry.Subscribe(typelessId, new TypedActorObserver<T>(observer), GetActorForWatch(typelessId));
+            }
+        });
+    }
+
+    /**
+     * Gets the effective value of an actor (unacked changes preferred over committed ones) for use as a watch
+     * snapshot.
+     *
+     * <remarks>Must be called with the read lock held. In-flight downloads are intentionally skipped; their
+     * completion records a change that will be delivered to watchers. In contrast to <see cref="TryGetActor"/>,
+     * this does not copy the actor into the unacked container nor block.</remarks>
+     */
+    private IActor? GetActorForWatch(TypelessActorId id)
+    {
+        if (unackedChangesContainer.DirtyActors.TryGetValue(id, out var unackedActor))
+        {
+            // A null value means the actor has been removed.
+            return unackedActor;
+        }
+
+        return actors.GetValueOrDefault(id);
     }
 
     public bool ContainsActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
@@ -269,7 +322,10 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         using (actorsLock.EnterWriteScope())
         {
             actors.Add(new(actor.Id), actor);
+            actorWatchRegistry.RecordChange(new TypelessActorId(actor.Id), actor);
         }
+
+        actorWatchRegistry.ReleaseChanges();
     }
 
     public T RemoveActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
@@ -284,22 +340,33 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
     public bool TryRemoveActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
     {
+        bool removed = false;
+
         using (actorsLock.EnterWriteScope())
         {
             if (unackedChangesContainer.TryRemoveActor(id, out actor))
             {
                 actors.Remove(new(id));
-                return true;
+                removed = true;
             }
-
-            if (TryGetActor(id, out actor))
+            else if (TryGetActor(id, out actor))
             {
                 actors.Remove(new(actor.Id));
-                return true;
+                removed = true;
             }
 
-            return false;
+            if (removed)
+            {
+                actorWatchRegistry.RecordChange(new TypelessActorId(id), null);
+            }
         }
+
+        if (removed)
+        {
+            actorWatchRegistry.ReleaseChanges();
+        }
+
+        return removed;
     }
 
     private void ApplyMessageOrdering(MessageOrdering ordering)
@@ -324,7 +391,12 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
             }
             
             ackedChangesContainer.ApplyTo(actors);
-            
+
+            foreach (var (id, actor) in ackedChangesContainer.DirtyActors)
+            {
+                actorWatchRegistry.RecordChange(id, actor);
+            }
+
             foreach (var (id, actor) in ackedChangesContainer.DirtyActors)
             {
                 if (!ordering.ActorHashes.TryGetValue(id, out var correctHash))
@@ -343,10 +415,23 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
                 }
             }
             
-            foreach (var (id, _) in ordering.ActorHashes)
+            foreach (var (id, correctHash) in ordering.ActorHashes)
             {
+                if (correctHash is null)
+                {
+                    // A null hash means the actor was removed on the server; remove it locally (this also covers
+                    // actors that the acked replay re-created, as the server's hash reflects its final state).
+                    if (actors.Remove(id))
+                    {
+                        actorWatchRegistry.RecordChange(id, null);
+                    }
+
+                    continue;
+                }
+
                 if (!ackedChangesContainer.DirtyActors.ContainsKey(id))
                 {
+                    // There must be some non-deterministic action happening, re-download the actor to remain in sync
                     DownloadActor(id);
                 }
             }
@@ -355,9 +440,16 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
             for (int i = 0; i < unackedMessages.Count; i++)
             {
                 var (id, message) = unackedMessages[i];
-                unackedChangesContainer.SendMessage(id, ref message);
+                var newActor = unackedChangesContainer.SendMessage(id, ref message);
+
+                if (newActor is not null)
+                {
+                    actorWatchRegistry.RecordChange(id, newActor);
+                }
             }
         }
+
+        actorWatchRegistry.ReleaseChanges();
     }
 
     /**
@@ -383,10 +475,13 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
                         if (t.IsCompletedSuccessfully)
                         {
                             actors[id] = t.Result;
+                            actorWatchRegistry.RecordChange(id, t.Result);
                         }
 
                         actorDownloads.Remove(id);
                     }
+
+                    actorWatchRegistry.ReleaseChanges();
                 });
             }
         }
@@ -398,8 +493,9 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         {
             if (disposing)
             {
-                backgroundTaskCanceller?.Dispose();
+                backgroundTaskCanceller?.Cancel();
                 actorsLock.Dispose();
+                actorWatchRegistry.Dispose();
             }
 
             Transport.Dispose();
