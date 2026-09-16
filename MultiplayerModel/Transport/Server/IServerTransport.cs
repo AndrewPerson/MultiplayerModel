@@ -32,7 +32,7 @@ public interface IServerTransport : IDisposable
      * matches the sender's ClientId
      * </remarks>
      */
-    public Task<(IActorId, IMessage)> ReceiveMessage(CancellationToken cancellationToken = default);
+    public Task<(TypelessActorId, IMessage)> ReceiveMessage(CancellationToken cancellationToken = default);
 
     public Task SendMessageOrdering
     (

@@ -34,5 +34,5 @@ public interface IRpcActorContainer : IActorContainer
      * are responsible for marshalling if needed.
      * </remarks>
      */
-    public IObservable<T?> Watch<T>(IActorId<T> id) where T : struct, ITypedActor<T>;
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : struct, ITypedActor<T>;
 }

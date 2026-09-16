@@ -27,14 +27,14 @@ public interface IClientTransport : IDisposable
     /**
      * Asynchronously fetch the latest version of an actor from the server.
      */
-    public Task<IActor> DownloadActor(IActorId actorId, CancellationToken cancellationToken = default);
+    public Task<IActor> DownloadActor(TypelessActorId actorId, CancellationToken cancellationToken = default);
 
     /**
      * Send a message to the server. Each message is received by the server EXACTLY once.
      *
      * <exception cref="FailedToSendMessageException">The transport couldn't send the message</exception>
      */
-    public Task SendMessage(IActorId actorId, IMessage message, CancellationToken cancellationToken = default);
+    public Task SendMessage(TypelessActorId actorId, IMessage message, CancellationToken cancellationToken = default);
 
     /**
      * Receive the latest message ordering from the server. Each ordering is received EXACTLY once.

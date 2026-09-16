@@ -8,7 +8,7 @@ namespace MultiplayerModel.Actor;
  */
 public interface IActor
 {
-    public IActorId Id { get; }
+    public TypelessActorId Id { get; }
     
     public int StableHash();
 }
@@ -25,13 +25,13 @@ public interface IActor<TMessage> : IActor where TMessage : IMessage
     public IActor ProcessMessage(IActorContainer actorContainer, ref TMessage message);
 }
 
-public interface ITypedActor<out TSelf> : IActor where TSelf : struct, ITypedActor<TSelf>
+public interface ITypedActor<TSelf> : IActor where TSelf : struct, ITypedActor<TSelf>
 {
-    public new IActorId<TSelf> Id { get; }
-    IActorId IActor.Id => Id;
+    public new ActorId<TSelf> Id { get; }
+    TypelessActorId IActor.Id => Id;
 }
 
-public interface ITypedActor<out TSelf, TMessage> : ITypedActor<TSelf>, IActor<TMessage>
+public interface ITypedActor<TSelf, TMessage> : ITypedActor<TSelf>, IActor<TMessage>
     where TSelf : struct, ITypedActor<TSelf> where TMessage : IMessage
 {
     IActor IActor<TMessage>.ProcessMessage(IActorContainer actorContainer, ref TMessage message)

@@ -21,12 +21,12 @@ public class InMemoryClientTransport(InMemoryNetwork network, uint clientId) : I
         return Task.FromResult(network.Server.ListActorsHandler!.ListActors());
     }
 
-    public Task<IActor> DownloadActor(IActorId actorId, CancellationToken cancellationToken = default)
+    public Task<IActor> DownloadActor(TypelessActorId actorId, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(network.Server.DownloadHandler!.GetActorForDownload(new(actorId))!);
+        return Task.FromResult(network.Server.DownloadHandler!.GetActorForDownload(actorId)!);
     }
 
-    public Task SendMessage(IActorId actorId, IMessage message, CancellationToken cancellationToken = default)
+    public Task SendMessage(TypelessActorId actorId, IMessage message, CancellationToken cancellationToken = default)
     {
         network.Server.QueueMessage(actorId, message);
         return Task.CompletedTask;

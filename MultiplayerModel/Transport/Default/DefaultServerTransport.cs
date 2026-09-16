@@ -28,7 +28,7 @@ public class DefaultServerTransport : IServerTransport
 
     private readonly ConcurrentDictionary<uint, MessageOrderingSseConnection> messageOrderingConnections = new();
 
-    private readonly BufferBlock<(IActorId, IMessage)> incomingMessages = new();
+    private readonly BufferBlock<(TypelessActorId, IMessage)> incomingMessages = new();
 
     private readonly ILogger logger;
 
@@ -387,7 +387,7 @@ public class DefaultServerTransport : IServerTransport
         return false;
     }
 
-    public async Task<(IActorId, IMessage)> ReceiveMessage(CancellationToken cancellationToken = default)
+    public async Task<(TypelessActorId, IMessage)> ReceiveMessage(CancellationToken cancellationToken = default)
     {
         return await incomingMessages.ReceiveAsync(cancellationToken);
     }

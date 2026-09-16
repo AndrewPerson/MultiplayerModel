@@ -111,7 +111,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         }
     }
 
-    public T? SendMessage<T, TMessage>(IActorId<T> actorId, TMessage message)
+    public T? SendMessage<T, TMessage>(ActorId<T> actorId, TMessage message)
         where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
     {
         T? newActor;
@@ -122,7 +122,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
             if (newActor is not null)
             {
-                actorWatchRegistry.RecordChange(new TypelessActorId(actorId), newActor);
+                actorWatchRegistry.RecordChange(actorId, newActor);
             }
         }
 
@@ -131,7 +131,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         return newActor;
     }
 
-    public IActor? SendMessage(IActorId actorId, IMessage message)
+    public IActor? SendMessage(TypelessActorId actorId, IMessage message)
     {
         IActor? newActor;
 
@@ -141,7 +141,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
             if (newActor is not null)
             {
-                actorWatchRegistry.RecordChange(new TypelessActorId(actorId), newActor);
+                actorWatchRegistry.RecordChange(actorId, newActor);
             }
         }
 
@@ -180,9 +180,9 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         }
     }
 
-    public IObservable<T?> Watch<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : struct, ITypedActor<T>
     {
-        var typelessId = new TypelessActorId(id);
+        TypelessActorId typelessId = id;
 
         return new DelegateObservable<T?>(observer =>
         {
@@ -213,34 +213,34 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         return actors.GetValueOrDefault(id);
     }
 
-    public bool ContainsActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    public bool ContainsActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
     {
         using (actorsLock.EnterReadScope())
         {
-            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out var unackedActor))
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(id, out var unackedActor))
             {
                 if (unackedActor is T) return true;
                 if (unackedActor is null) return false; // A null value means the actor has been removed
             }
 
-            return actors.TryGetValue(new(id), out var actor) && actor is T;
+            return actors.TryGetValue(id, out var actor) && actor is T;
         }
     }
 
-    public bool ContainsActor(IActorId id)
+    public bool ContainsActor(TypelessActorId id)
     {
         using (actorsLock.EnterReadScope())
         {
-            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out var actor))
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(id, out var actor))
             {
                 return actor is not null;
             }
 
-            return actors.ContainsKey(new(id));
+            return actors.ContainsKey(id);
         }
     }
 
-    public T GetActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    public T GetActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
     {
         if (TryGetActor(id, out var actor))
         {
@@ -250,11 +250,11 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         throw new KeyNotFoundException();
     }
 
-    public bool TryGetActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    public bool TryGetActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>
     {
         using (actorsLock.EnterReadScope())
         {
-            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out var untypedUnackedActor))
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(id, out var untypedUnackedActor))
             {
                 // A null value means the actor has been removed
                 if (untypedUnackedActor is null)
@@ -270,7 +270,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
                 }
             }
 
-            if (actors.TryGetValue(new(id), out var untypedActor) && untypedActor is T typedActor)
+            if (actors.TryGetValue(id, out var untypedActor) && untypedActor is T typedActor)
             {
                 actor = typedActor;
                 return true;
@@ -281,17 +281,17 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         return false;
     }
 
-    public bool TryGetActor(IActorId id, [MaybeNullWhen(false)] out IActor actor)
+    public bool TryGetActor(TypelessActorId id, [MaybeNullWhen(false)] out IActor actor)
     {
         using (actorsLock.EnterReadScope())
         {
-            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(new(id), out actor))
+            if (nextMessageOrderingContainer.DirtyActors.TryGetValue(id, out actor))
             {
                 // A null value means the actor has been removed
                 return actor is not null;
             }
 
-            if (actors.TryGetValue(new(id), out actor))
+            if (actors.TryGetValue(id, out actor))
             {
                 return true;
             }
@@ -305,14 +305,14 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
     {
         using (actorsLock.EnterWriteScope())
         {
-            actors.Add(new(actor.Id), actor);
-            actorWatchRegistry.RecordChange(new TypelessActorId(actor.Id), actor);
+            actors.Add(actor.Id, actor);
+            actorWatchRegistry.RecordChange(actor.Id, actor);
         }
 
         actorWatchRegistry.ReleaseChanges();
     }
 
-    public T RemoveActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    public T RemoveActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
     {
         if (TryRemoveActor(id, out var actor))
         {
@@ -322,7 +322,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         throw new KeyNotFoundException();
     }
 
-    public bool TryRemoveActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    public bool TryRemoveActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>
     {
         bool removed = false;
 
@@ -330,18 +330,18 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         {
             if (nextMessageOrderingContainer.TryRemoveActor(id, out actor))
             {
-                actors.Remove(new(id));
+                actors.Remove(id);
                 removed = true;
             }
             else if (TryGetActor(id, out actor))
             {
-                actors.Remove(new(actor.Id));
+                actors.Remove(actor.Id);
                 removed = true;
             }
 
             if (removed)
             {
-                actorWatchRegistry.RecordChange(new TypelessActorId(id), null);
+                actorWatchRegistry.RecordChange(id, null);
             }
         }
 

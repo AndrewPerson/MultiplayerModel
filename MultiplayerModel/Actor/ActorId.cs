@@ -11,12 +11,13 @@ public interface IActorId
 
 public interface IActorId<out T> : IActorId where T : IActor;
 
-public readonly record struct ActorId<T>(uint ContainerId, ulong LocalId) : IActorId<T> where T : IActor;
-
-[JsonConverter(typeof(TypelessActorIdConverter))]
-public readonly record struct TypelessActorId(uint ContainerId, ulong LocalId) : IActorId
+public readonly record struct ActorId<T>(uint ContainerId, ulong LocalId) : IActorId<T> where T : IActor
 {
-    public TypelessActorId(IActorId other) : this(other.ContainerId, other.LocalId)
+    public static implicit operator TypelessActorId(ActorId<T> self)
     {
+        return new TypelessActorId(self.ContainerId, self.LocalId);
     }
 }
+
+[JsonConverter(typeof(TypelessActorIdConverter))]
+public readonly record struct TypelessActorId(uint ContainerId, ulong LocalId) : IActorId;

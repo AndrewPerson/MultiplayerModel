@@ -23,7 +23,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
 
     /**
      * A collection of all actors that have changed after sending various messages with
-     * <see cref="SendMessage{T,TMessage}(IActorId{T}, TMessage)"/> (or any other overload). These actors are NOT the
+     * <see cref="SendMessage{T,TMessage}(ActorId{T}, TMessage)"/> (or any other overload). These actors are NOT the
      * same objects as the actors with corresponding ids in <see cref="parent"/> (they are copies). To apply to a
      * container, copy all the dirty values into the container's internal actor storage. <see cref="ApplyTo"/> can
      * automate this for you.
@@ -36,7 +36,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     private readonly Dictionary<TypelessActorId, IActor?> dirtyActors = [];
 
     /**
-     * A list of all messages that have been applied using <see cref="SendMessage{T,TMessage}(IActorId{T}, TMessage)"/>
+     * A list of all messages that have been applied using <see cref="SendMessage{T,TMessage}(ActorId{T}, TMessage)"/>
      * (or any other overload).
      */
     public IReadOnlyList<(TypelessActorId, IMessage)> AppliedMessages => appliedMessages;
@@ -124,9 +124,9 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * implementation on <see cref="parent"/> doesn't call this as well.
      * </remarks>
      */
-    public bool ContainsActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    public bool ContainsActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
     {
-        if (dirtyActors.TryGetValue(new(id), out var uncastActor))
+        if (dirtyActors.TryGetValue(id, out var uncastActor))
         {
             return uncastActor switch
             {
@@ -147,9 +147,9 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * implementation on <see cref="parent"/> doesn't call this as well.
      * </remarks>
      */
-    public bool ContainsActor(IActorId id)
+    public bool ContainsActor(TypelessActorId id)
     {
-        if (dirtyActors.TryGetValue(new(id), out var actor))
+        if (dirtyActors.TryGetValue(id, out var actor))
         {
             return actor is not null;
         }
@@ -162,7 +162,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <seealso cref="DirtyActors"/>
      * <seealso cref="AppliedMessages"/>
      */
-    public T? SendMessage<T, TMessage>(IActorId<T> actorId, TMessage message)
+    public T? SendMessage<T, TMessage>(ActorId<T> actorId, TMessage message)
         where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
     {
         return SendMessage(actorId, ref message);
@@ -172,21 +172,21 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <seealso cref="DirtyActors"/>
      * <seealso cref="AppliedMessages"/>
      */
-    public T? SendMessage<T, TMessage>(IActorId<T> actorId, ref TMessage message)
+    public T? SendMessage<T, TMessage>(ActorId<T> actorId, ref TMessage message)
         where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
     {
         if (TryGetActor(actorId, out var actor))
         {
             var newActor = actor.ProcessMessage(this, ref message);
-            dirtyActors[new(actorId)] = newActor;
+            dirtyActors[actorId] = newActor;
 
-            appliedMessages.Add((new(actorId), message));
+            appliedMessages.Add((actorId, message));
             
             return newActor;
         }
         else
         {
-            appliedMessages.Add((new(actorId), message));
+            appliedMessages.Add((actorId, message));
             return null;
         }
     }
@@ -195,26 +195,26 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <seealso cref="DirtyActors"/>
      * <seealso cref="AppliedMessages"/>
      */
-    public IActor? SendMessage(IActorId actorId, IMessage message) => SendMessage(actorId, ref message);
+    public IActor? SendMessage(TypelessActorId actorId, IMessage message) => SendMessage(actorId, ref message);
 
     /**
      * <seealso cref="DirtyActors"/>
      * <seealso cref="AppliedMessages"/>
      */
-    public IActor? SendMessage(IActorId actorId, ref IMessage message)
+    public IActor? SendMessage(TypelessActorId actorId, ref IMessage message)
     {
         if (TryGetActor(actorId, out var actor))
         {
             var newActor = message.TryDispatch(this, actor);
-            dirtyActors[new(actorId)] = newActor;
+            dirtyActors[actorId] = newActor;
             
-            appliedMessages.Add((new(actorId), message));
+            appliedMessages.Add((actorId, message));
 
             return newActor;
         }
         else
         {
-            appliedMessages.Add((new(actorId), message));
+            appliedMessages.Add((actorId, message));
             return null;
         }
     }
@@ -223,7 +223,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <inheritdoc/>
      * <remarks>Forwards to <see cref="TryGetActor"/> under the hood</remarks>
      */
-    public T GetActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    public T GetActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
     {
         if (TryGetActor(id, out var actor))
         {
@@ -246,9 +246,9 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * This allows changes to actors to be tracked and also applied in isolation to the actors in <see cref="parent"/>
      * </remarks>
      */
-    public bool TryGetActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    public bool TryGetActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>
     {
-        if (dirtyActors.TryGetValue(new(id), out var uncastActor))
+        if (dirtyActors.TryGetValue(id, out var uncastActor))
         {
             // A null value means the actor has been removed.
             if (uncastActor is null)
@@ -266,7 +266,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
 
         if (parent.TryGetActor(id, out actor))
         {
-            dirtyActors[new(id)] = actor;
+            dirtyActors[id] = actor;
             return true;
         }
 
@@ -274,9 +274,9 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
         return false;
     }
 
-    public bool TryGetActor(IActorId id, [MaybeNullWhen(false)] out IActor actor)
+    public bool TryGetActor(TypelessActorId id, [MaybeNullWhen(false)] out IActor actor)
     {
-        if (dirtyActors.TryGetValue(new(id), out actor))
+        if (dirtyActors.TryGetValue(id, out actor))
         {
             // A null value means the actor has been removed.
             return actor is not null;
@@ -284,7 +284,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
 
         if (parent.TryGetActor(id, out actor))
         {
-            dirtyActors[new(id)] = actor;
+            dirtyActors[id] = actor;
             return true;
         }
 
@@ -304,10 +304,10 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      */
     public void AddActor<T>(in T actor) where T : struct, ITypedActor<T>
     {
-        dirtyActors.Add(new(actor.Id), actor);
+        dirtyActors.Add(actor.Id, actor);
     }
 
-    public T RemoveActor<T>(IActorId<T> id) where T : struct, ITypedActor<T>
+    public T RemoveActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
     {
         if (TryRemoveActor(id, out var actor))
         {
@@ -317,11 +317,11 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
         throw new KeyNotFoundException();
     }
 
-    public bool TryRemoveActor<T>(IActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    public bool TryRemoveActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>
     {
         if (TryGetActor(id, out actor))
         {
-            dirtyActors[new(id)] = null;
+            dirtyActors[id] = null;
             return true;
         }
 

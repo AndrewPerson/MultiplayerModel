@@ -11,19 +11,19 @@ public class InMemoryServerTransport(InMemoryNetwork network) : IServerTransport
     public IListActorsHandler? ListActorsHandler { get; set; }
     public IActorDownloadHandler? DownloadHandler { get; set; }
 
-    private readonly BufferBlock<(IActorId, IMessage)> messages = new();
+    private readonly BufferBlock<(TypelessActorId, IMessage)> messages = new();
     
     public Task Run(CancellationToken cancellationToken = default)
     {
         return Task.Delay(Timeout.Infinite, cancellationToken);
     }
 
-    public void QueueMessage(IActorId actorId, IMessage message)
+    public void QueueMessage(TypelessActorId actorId, IMessage message)
     {
         messages.Post((actorId, message));
     }
 
-    public async Task<(IActorId, IMessage)> ReceiveMessage(CancellationToken cancellationToken = default)
+    public async Task<(TypelessActorId, IMessage)> ReceiveMessage(CancellationToken cancellationToken = default)
     {
         var message = await messages.ReceiveAsync(cancellationToken);
         return message;

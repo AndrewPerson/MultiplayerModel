@@ -141,7 +141,7 @@ public class DefaultClientTransport : IClientTransport
         return result;
     }
 
-    public async Task<IActor> DownloadActor(IActorId actorId, CancellationToken cancellationToken = default)
+    public async Task<IActor> DownloadActor(TypelessActorId actorId, CancellationToken cancellationToken = default)
     {
         var downloadActorUriBuilder = new UriBuilder(downloadActorBaseUri);
         downloadActorUriBuilder.Path += '/' + actorId.ContainerId.ToString() + '/' + actorId.LocalId;
@@ -155,7 +155,7 @@ public class DefaultClientTransport : IClientTransport
         return (await JsonSerializer.DeserializeAsync<IActor>(stream, actorSerialisationOptions, cancellationToken))!;
     }
 
-    public async Task SendMessage(IActorId actorId, IMessage message, CancellationToken cancellationToken = default)
+    public async Task SendMessage(TypelessActorId actorId, IMessage message, CancellationToken cancellationToken = default)
     {
         var sendMessageUriBuilder = new UriBuilder(sendMessageBaseUri);
         sendMessageUriBuilder.Path += '/' + actorId.ContainerId.ToString() + '/' + actorId.LocalId + "/message";
