@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using MultiplayerModel.Actor;
 using MultiplayerModel.Extension;
+using MultiplayerModel.Rpc.Observables;
 using MultiplayerModel.Transport.Client;
 using MultiplayerModel.Transport.Shared;
 
@@ -104,7 +105,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
             if (newActor is not null)
             {
-                actorWatchRegistry.RecordChange(actorId, newActor);
+                actorWatchRegistry.RecordChange(actorId, typeof(T), newActor);
             }
         }
 
@@ -132,7 +133,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
             if (newActor is not null)
             {
-                actorWatchRegistry.RecordChange(actorId, newActor);
+                actorWatchRegistry.RecordChange(actorId, newActor.GetType(), newActor);
             }
         }
 
@@ -185,6 +186,19 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
             using (actorsLock.EnterReadScope())
             {
                 return actorWatchRegistry.Subscribe(typelessId, new TypedActorObserver<T>(observer), GetActorForWatch(typelessId));
+            }
+        });
+    }
+
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : struct, ITypedActor<T>
+    {
+        return new DelegateObservable<(ActorId<T>, T?)>(observer =>
+        {
+            // Holding the read lock while subscribing orders the initial snapshot before any subsequently
+            // recorded changes, without comparing values.
+            using (actorsLock.EnterReadScope())
+            {
+                return actorWatchRegistry.Subscribe<T>(new IdAndTypedActorObserver<T>(observer));
             }
         });
     }
@@ -322,7 +336,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         using (actorsLock.EnterWriteScope())
         {
             actors.Add(actor.Id, actor);
-            actorWatchRegistry.RecordChange(actor.Id, actor);
+            actorWatchRegistry.RecordChange(actor.Id, typeof(T), actor);
         }
 
         actorWatchRegistry.ReleaseChanges();
@@ -357,7 +371,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
             if (removed)
             {
-                actorWatchRegistry.RecordChange(id, null);
+                actorWatchRegistry.RecordChange(id,  typeof(T), null);
             }
         }
 
@@ -390,12 +404,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
                 unackedMessagesDict.Remove(message.Id);
             }
             
-            ackedChangesContainer.ApplyTo(actors);
-
-            foreach (var (id, actor) in ackedChangesContainer.DirtyActors)
-            {
-                actorWatchRegistry.RecordChange(id, actor);
-            }
+            ackedChangesContainer.ApplyTo(actors, actorWatchRegistry);
 
             foreach (var (id, actor) in ackedChangesContainer.DirtyActors)
             {
@@ -421,9 +430,9 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
                 {
                     // A null hash means the actor was removed on the server; remove it locally (this also covers
                     // actors that the acked replay re-created, as the server's hash reflects its final state).
-                    if (actors.Remove(id))
+                    if (actors.Remove(id, out var actor))
                     {
-                        actorWatchRegistry.RecordChange(id, null);
+                        actorWatchRegistry.RecordChange(id, actor.GetType(), null);
                     }
 
                     continue;
@@ -444,7 +453,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
                 if (newActor is not null)
                 {
-                    actorWatchRegistry.RecordChange(id, newActor);
+                    actorWatchRegistry.RecordChange(id, newActor.GetType(), newActor);
                 }
             }
         }
@@ -475,7 +484,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
                         if (t.IsCompletedSuccessfully)
                         {
                             actors[id] = t.Result;
-                            actorWatchRegistry.RecordChange(id, t.Result);
+                            actorWatchRegistry.RecordChange(id, t.Result.GetType(), t.Result);
                         }
 
                         actorDownloads.Remove(id);

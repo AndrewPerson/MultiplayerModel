@@ -33,6 +33,26 @@ public interface IRpcActorContainer : IActorContainer
      * Values are emitted on the thread that applied the change, so observers may be called from arbitrary threads and
      * are responsible for marshalling if needed.
      * </remarks>
+     *
+     * <seealso cref="Watch()"/>
      */
     public IObservable<T?> Watch<T>(ActorId<T> id) where T : struct, ITypedActor<T>;
+    
+    /**
+     * <summary>Watches all actors of type <typeparamref name="T"/> for changes.</summary>
+     *
+     * <remarks>
+     * Emits the value and id of any actor of type <typeparamref name="T"/> that changes (or is removed, in which case
+     * the value is null).
+     * <br/>
+     * Changes are batched: at most one value is emitted per actor per change batch (i.e. one applied message
+     * ordering on a client, or one local change on a server), although the same value may be emitted more than once.
+     * <br/>
+     * Values are emitted on the thread that applied the change, so observers may be called from arbitrary threads and
+     * are responsible for marshalling if needed.
+     * </remarks>
+     *
+     * <seealso cref="Watch{T}(ActorId{T})"/>
+     */
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : struct, ITypedActor<T>;
 }

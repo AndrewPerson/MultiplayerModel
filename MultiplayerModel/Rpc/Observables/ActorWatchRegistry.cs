@@ -1,7 +1,7 @@
 using MultiplayerModel.Actor;
 using MultiplayerModel.Extension;
 
-namespace MultiplayerModel.Rpc;
+namespace MultiplayerModel.Rpc.Observables;
 
 /**
  * Tracks per-actor watches and batches change notifications.
@@ -13,20 +13,28 @@ namespace MultiplayerModel.Rpc;
  * single aggregated change per actor.
  *
  * The owning container is responsible for calling <see cref="ReleaseChanges"/> at the end of each change
- * batch, and for passing a meaningful snapshot when forwarding <see cref="IRpcActorContainer.Watch"/> calls to
+ * batch, and for passing a meaningful snapshot when forwarding <see cref="IRpcActorContainer.Watch()"/> calls to
  * <see cref="Subscribe"/>.
  * </remarks>
  */
-internal sealed class ActorWatchRegistry : IDisposable
+public sealed partial class ActorWatchRegistry : IDisposable
 {
+    private sealed class TypeWatchEntry
+    {
+        public readonly List<TypeWatchSubscription> Subscriptions = [];
+    }
+    
     private sealed class WatchEntry
     {
         public readonly List<WatchSubscription> Subscriptions = [];
     }
 
     private readonly SemaphoreSlim gate = new(1, 1);
+
+    private readonly Dictionary<Type, TypeWatchEntry> typeEntries = [];
     private readonly Dictionary<TypelessActorId, WatchEntry> entries = [];
-    private readonly Dictionary<TypelessActorId, IActor?> pendingChanges = [];
+    
+    private readonly Dictionary<TypelessActorId, (Type, IActor?)> pendingChanges = [];
 
     private bool disposed;
 
@@ -68,6 +76,30 @@ internal sealed class ActorWatchRegistry : IDisposable
         return subscription;
     }
 
+    public IDisposable Subscribe<T>(IObserver<(TypelessActorId, IActor?)> observer) where T : struct, ITypedActor<T>
+    {
+        var type = typeof(T);
+        TypeWatchSubscription subscription;
+
+        // The gate must be released before the snapshot is delivered: the delivery is a callback into
+        // user code, which may unsubscribe (re-taking the non-reentrant gate).
+        using (gate.EnterWaitScope())
+        {
+            ThrowIfDisposed();
+
+            if (!typeEntries.TryGetValue(type, out var entry))
+            {
+                entry = new TypeWatchEntry();
+                typeEntries[type] = entry;
+            }
+
+            subscription = new TypeWatchSubscription(this, type, entry, observer);
+            entry.Subscriptions.Add(subscription);
+        }
+
+        return subscription;
+    }
+
     /**
      * Records a change of the actor with <paramref name="id"/>. <c>null</c> means the actor was removed.
      *
@@ -76,11 +108,11 @@ internal sealed class ActorWatchRegistry : IDisposable
      * value per actor is delivered.
      * </remarks>
      */
-    public void RecordChange(TypelessActorId id, IActor? actor)
+    public void RecordChange(TypelessActorId id, Type type, IActor? actor)
     {
         using (gate.EnterWaitScope())
         {
-            pendingChanges[id] = actor;
+            pendingChanges[id] = (type, actor);
         }
     }
 
@@ -93,7 +125,7 @@ internal sealed class ActorWatchRegistry : IDisposable
      */
     public void ReleaseChanges()
     {
-        List<(TypelessActorId Id, IActor? Actor)> batch;
+        List<(TypelessActorId Id, Type Type, IActor? Actor)> batch;
 
         using (gate.EnterWaitScope())
         {
@@ -103,24 +135,33 @@ internal sealed class ActorWatchRegistry : IDisposable
             }
 
             batch = pendingChanges
-                .Select(kv => (Id: kv.Key, Actor: kv.Value))
+                .Select(kv => (Id: kv.Key, Type: kv.Value.Item1, Actor: kv.Value.Item2))
                 .ToList();
 
             pendingChanges.Clear();
         }
 
-        foreach (var (id, actor) in batch)
+        foreach (var (id, type, actor) in batch)
         {
-            List<WatchSubscription> subscriptions;
+            List<WatchSubscription> subscriptions = [];
+            List<TypeWatchSubscription> typeSubscriptions = [];
 
             using (gate.EnterWaitScope())
             {
-                if (!entries.TryGetValue(id, out var entry))
+                if (entries.TryGetValue(id, out var entry))
                 {
-                    continue;
+                    subscriptions = entry.Subscriptions.ToList();
                 }
+                
+                if (typeEntries.TryGetValue(type, out var typeEntry))
+                {
+                    typeSubscriptions = typeEntry.Subscriptions.ToList();
+                }
+            }
 
-                subscriptions = entry.Subscriptions.ToList();
+            foreach (var subscription in typeSubscriptions)
+            {
+                subscription.Deliver(id, actor);
             }
 
             foreach (var subscription in subscriptions)
@@ -135,6 +176,7 @@ internal sealed class ActorWatchRegistry : IDisposable
      */
     public void Dispose()
     {
+        List<TypeWatchSubscription> allTypeSubscriptions;
         List<WatchSubscription> allSubscriptions;
 
         using (gate.EnterWaitScope())
@@ -146,9 +188,18 @@ internal sealed class ActorWatchRegistry : IDisposable
 
             disposed = true;
 
+            allTypeSubscriptions = typeEntries.Values.SelectMany(entry => entry.Subscriptions).ToList();
             allSubscriptions = entries.Values.SelectMany(entry => entry.Subscriptions).ToList();
+            
             entries.Clear();
+            typeEntries.Clear();
+            
             pendingChanges.Clear();
+        }
+        
+        foreach (var subscription in allTypeSubscriptions)
+        {
+            subscription.Complete();
         }
 
         foreach (var subscription in allSubscriptions)
@@ -169,124 +220,4 @@ internal sealed class ActorWatchRegistry : IDisposable
             throw new ObjectDisposedException(nameof(ActorWatchRegistry));
         }
     }
-
-    /**
-     * A single watcher on an actor. Detaches itself if its observer throws.
-     */
-    private sealed class WatchSubscription(
-        ActorWatchRegistry registry,
-        TypelessActorId id,
-        WatchEntry entry,
-        IObserver<IActor?> observer
-    ) : IDisposable
-    {
-        private bool finished;
-
-        public void Deliver(IActor? actor)
-        {
-            if (Volatile.Read(ref finished))
-            {
-                return;
-            }
-
-            try
-            {
-                observer.OnNext(actor);
-            }
-            catch
-            {
-                // Detach a misbehaving observer so it doesn't affect other watchers of the same actor.
-                Dispose();
-            }
-        }
-
-        public void Complete()
-        {
-            if (Interlocked.Exchange(ref finished, true))
-            {
-                return;
-            }
-
-            RemoveFromEntry();
-
-            try
-            {
-                observer.OnCompleted();
-            }
-            catch
-            {
-                // Nothing sensible to do.
-            }
-        }
-
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref finished, true))
-            {
-                return;
-            }
-
-            RemoveFromEntry();
-        }
-
-        private void RemoveFromEntry()
-        {
-            SemaphoreSlimExtension.WaitScope scope;
-
-            try
-            {
-                scope = registry.gate.EnterWaitScope();
-            }
-            catch (ObjectDisposedException)
-            {
-                // The registry has been disposed; there is nothing left to clean up.
-                return;
-            }
-
-            using (scope)
-            {
-                entry.Subscriptions.Remove(this);
-
-                if (entry.Subscriptions.Count == 0)
-                {
-                    registry.entries.Remove(id);
-                }
-            }
-        }
-    }
-}
-
-/**
- * Adapts an untyped <see cref="IActor"/> watch to a typed <see cref="T"/> observer.
- */
-internal sealed class TypedActorObserver<T>(IObserver<T?> observer) : IObserver<IActor?>
-    where T : struct
-{
-    public void OnCompleted() => observer.OnCompleted();
-
-    public void OnError(Exception error) => observer.OnError(error);
-
-    public void OnNext(IActor? value)
-    {
-        switch (value)
-        {
-            case null:
-                observer.OnNext(null);
-                break;
-            case T typed:
-                observer.OnNext(typed);
-                break;
-            default:
-                throw new InvalidOperationException(
-                    $"Actor {value.Id} was expected to be of type {typeof(T).Name}, but was {value.GetType().Name}.");
-        }
-    }
-}
-
-/**
- * A minimal <see cref="IObservable{T}"/> backed by a subscription factory.
- */
-internal sealed class DelegateObservable<T>(Func<IObserver<T>, IDisposable> onSubscribe) : IObservable<T>
-{
-    public IDisposable Subscribe(IObserver<T> observer) => onSubscribe(observer);
 }

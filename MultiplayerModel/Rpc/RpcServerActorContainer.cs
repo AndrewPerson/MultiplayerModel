@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using MultiplayerModel.Actor;
 using MultiplayerModel.Extension;
+using MultiplayerModel.Rpc.Observables;
 using MultiplayerModel.Transport.Server;
 using MultiplayerModel.Transport.Shared;
 
@@ -70,7 +71,8 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
                             kv => kv.Value?.StableHash()
                         );
 
-                        nextMessageOrderingContainer.ApplyTo(actors);
+                        // Don't pass registry because we've already been emitting the events as we receive the messages
+                        nextMessageOrderingContainer.ApplyTo(actors, null);
                         nextMessageOrderingContainer.ReCreate();
                     }
 
@@ -122,7 +124,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
             if (newActor is not null)
             {
-                actorWatchRegistry.RecordChange(actorId, newActor);
+                actorWatchRegistry.RecordChange(actorId, typeof(T), newActor);
             }
         }
 
@@ -141,7 +143,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
             if (newActor is not null)
             {
-                actorWatchRegistry.RecordChange(actorId, newActor);
+                actorWatchRegistry.RecordChange(actorId, newActor.GetType(), newActor);
             }
         }
 
@@ -191,6 +193,19 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
             using (actorsLock.EnterReadScope())
             {
                 return actorWatchRegistry.Subscribe(typelessId, new TypedActorObserver<T>(observer), GetActorForWatch(typelessId));
+            }
+        });
+    }
+
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : struct, ITypedActor<T>
+    {
+        return new DelegateObservable<(ActorId<T>, T?)>(observer =>
+        {
+            // Holding the read lock while subscribing orders the initial snapshot before any subsequently
+            // recorded changes, without comparing values.
+            using (actorsLock.EnterReadScope())
+            {
+                return actorWatchRegistry.Subscribe<T>(new IdAndTypedActorObserver<T>(observer));
             }
         });
     }
@@ -306,7 +321,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         using (actorsLock.EnterWriteScope())
         {
             actors.Add(actor.Id, actor);
-            actorWatchRegistry.RecordChange(actor.Id, actor);
+            actorWatchRegistry.RecordChange(actor.Id, typeof(T), actor);
         }
 
         actorWatchRegistry.ReleaseChanges();
@@ -341,7 +356,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
 
             if (removed)
             {
-                actorWatchRegistry.RecordChange(id, null);
+                actorWatchRegistry.RecordChange(id, typeof(T), null);
             }
         }
 

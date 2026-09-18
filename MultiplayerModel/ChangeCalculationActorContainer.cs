@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using MultiplayerModel.Actor;
+using MultiplayerModel.Rpc.Observables;
 
 namespace MultiplayerModel;
 
@@ -68,17 +69,19 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     /**
      * Applies the changes from <see cref="DirtyActors"/> to <paramref name="target"/>.
      */
-    public void ApplyTo(IDictionary<TypelessActorId, IActor> target)
+    public void ApplyTo(IDictionary<TypelessActorId, IActor> target, ActorWatchRegistry? actorWatchRegistry)
     {
         foreach (var (id, actor) in DirtyActors)
         {
             if (actor is null)
             {
-                target.Remove(id);
+                var oldActor = target.Remove(id);
+                actorWatchRegistry?.RecordChange(id, oldActor.GetType(), null);
             }
             else
             {
                 target[id] = actor;
+                actorWatchRegistry?.RecordChange(id, actor.GetType(), actor);
             }
         }
     }
