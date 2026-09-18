@@ -9,7 +9,7 @@ public readonly record struct Message(string Username, string Text);
 [ActorSerialisationMixin("chat")]
 [MessageSerialisationMixin("chat")]
 public readonly partial record struct Chat(
-    IActorId<Chat> Id,
+    ActorId<Chat> Id,
     ImmutableList<Message> Messages,
     ImmutableDictionary<string, uint> ClientUsernames
 )

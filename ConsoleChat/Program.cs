@@ -1,9 +1,11 @@
 ﻿using System.Collections.Immutable;
+using System.Reactive.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 using ConsoleChat;
 using Microsoft.Extensions.Logging;
 using MultiplayerModel.Actor;
+using MultiplayerModel.Extension;
 using MultiplayerModel.Rpc;
 using MultiplayerModel.Serialisation;
 using MultiplayerModel.Serialisation.Json;
@@ -80,35 +82,59 @@ else
 
 _ = actorContainer.Run().ContinueWith(t =>
 {
-    Console.WriteLine("Stopped running");
     if (t.IsFaulted)
     {
-        Console.WriteLine(t.Exception);
+        logger.LogCritical(t.Exception, "Stopped running with exception");
+    }
+    else
+    {
+        logger.LogCritical("Stopped running cleanly");
     }
 });
 
-await Task.Delay(1000);
+Chat chat;
+if (host)
+{
+    chat = actorContainer.GetActor(actorContainer.ListActors<Chat>().First());
+}
+else
+{
+    Console.WriteLine("Starting watch");
+    chat = (await actorContainer.Watch<Chat>().FirstAsync()).Item2!.Value;
+}
 
-var chat = actorContainer.GetActor(actorContainer.ListActors<Chat>().First());
+// await Task.Delay(1000);
+// var chat = actorContainer.GetActor(actorContainer.ListActors<Chat>().First());
 
 Console.Write("Username: ");
 var username = Console.ReadLine()!;
 chat = chat.Join(actorContainer, username);
 
+var consoleLock = new SemaphoreSlim(1);
+actorContainer.Watch(chat.Id).Subscribe(c =>
+{
+    if (c is null)
+    {
+        return;
+    }
+
+    using (consoleLock.EnterWaitScope())
+    {
+        Console.Clear();
+        foreach (var chatMessage in c.Value.Messages.TakeLast(10))
+        {
+            Console.WriteLine($"{chatMessage.Username}: {chatMessage.Text}");
+        }
+
+        Console.Write("> ");
+    }
+});
+
 while (true)
 {
-    Console.Write("> ");
     var message = Console.ReadLine();
     if (!string.IsNullOrEmpty(message))
     {
-        chat = chat.SendMessage(actorContainer, new Message(username, message));
-    }
-
-    chat = actorContainer.GetActor(chat.Id);
-    
-    Console.Clear();
-    foreach (var chatMessage in chat.Messages.TakeLast(10))
-    {
-        Console.WriteLine($"{chatMessage.Username}: {chatMessage.Text}");
+        chat.SendMessage(actorContainer, new Message(username, message));
     }
 }

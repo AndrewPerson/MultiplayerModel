@@ -5,7 +5,7 @@ namespace Playground;
 
 [ActorSerialisationMixin("person")]
 [MessageSerialisationMixin("person")]
-public readonly partial record struct Person(IActorId<Person> Id, string Name) : ITypedActor<Person>
+public readonly partial record struct Person(ActorId<Person> Id, string Name) : ITypedActor<Person>
 {
     [MessageHandler]
     public Person Greet([MessageId] MessageId messageId)
