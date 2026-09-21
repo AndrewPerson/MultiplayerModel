@@ -23,8 +23,8 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="AP2.SourceGenUtils" Version="0.0.20" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-        <PackageReference Include="SourceGenUtils" Version="0.0.20" PrivateAssets="all" GeneratePathProperty="true" />
         <None Include="$(PkgSourceGenUtils)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
     </ItemGroup>
 
