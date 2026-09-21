@@ -1,24 +1,28 @@
+name: Publish Nuget Package
+
 on:
-  release: 
+  release:
+    types: [ "published" ]
+  workflow_dispatch:
 
 jobs:
   build-and-publish:
     runs-on: ubuntu-24.04
     permissions:
       id-token: write  # enable GitHub OIDC token issuance for this job
-    
+
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6.0.0
       - run: dotnet pack -o Out
-    
+
       # Get a short-lived NuGet API key
       - name: NuGet login (OIDC → temp API key)
         uses: NuGet/login@v1
         id: login
         with:
           user: ${{ secrets.NUGET_USER }}
-    
+
       # Push the package
       - name: NuGet push
         run: dotnet nuget push Out/MultiplayerModel.*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json
