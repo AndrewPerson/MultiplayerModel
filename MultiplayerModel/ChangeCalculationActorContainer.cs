@@ -81,7 +81,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
             else
             {
                 target[id] = actor;
-                actorWatchRegistry?.RecordChange(id, actor.GetType(), actor);
+                actorWatchRegistry?.RecordChange(id, actor.GetType(), actor.Clone());
             }
         }
     }
@@ -107,7 +107,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * implementation on <see cref="parent"/> doesn't call this as well.
      * </remarks>
      */
-    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : struct, ITypedActor<T>
+    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : ITypedActor<T>
     {
         return parent
             .ListActors<T>()
@@ -127,7 +127,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * implementation on <see cref="parent"/> doesn't call this as well.
      * </remarks>
      */
-    public bool ContainsActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
+    public bool ContainsActor<T>(ActorId<T> id) where T : ITypedActor<T>
     {
         if (dirtyActors.TryGetValue(id, out var uncastActor))
         {
@@ -166,7 +166,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <seealso cref="AppliedMessages"/>
      */
     public T? SendMessage<T, TMessage>(ActorId<T> actorId, TMessage message)
-        where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
+        where T : ITypedActor<T, TMessage> where TMessage : IMessage
     {
         return SendMessage(actorId, ref message);
     }
@@ -176,21 +176,19 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <seealso cref="AppliedMessages"/>
      */
     public T? SendMessage<T, TMessage>(ActorId<T> actorId, ref TMessage message)
-        where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage
+        where T : ITypedActor<T, TMessage> where TMessage : IMessage
     {
         if (TryGetActor(actorId, out var actor))
         {
-            var newActor = actor.ProcessMessage(this, ref message);
-            dirtyActors[actorId] = newActor;
-
+            actor.ProcessMessage(this, ref message);
             appliedMessages.Add((actorId, message));
-            
-            return newActor;
+
+            return actor.Clone();
         }
         else
         {
             appliedMessages.Add((actorId, message));
-            return null;
+            return default;
         }
     }
 
@@ -208,12 +206,11 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     {
         if (TryGetActor(actorId, out var actor))
         {
-            var newActor = message.TryDispatch(this, actor);
-            dirtyActors[actorId] = newActor;
+            message.TryDispatch(this, actor);
             
             appliedMessages.Add((actorId, message));
 
-            return newActor;
+            return actor.Clone();
         }
         else
         {
@@ -226,7 +223,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <inheritdoc/>
      * <remarks>Forwards to <see cref="TryGetActor"/> under the hood</remarks>
      */
-    public T GetActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
+    public T GetActor<T>(ActorId<T> id) where T : ITypedActor<T>
     {
         if (TryGetActor(id, out var actor))
         {
@@ -249,7 +246,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * This allows changes to actors to be tracked and also applied in isolation to the actors in <see cref="parent"/>
      * </remarks>
      */
-    public bool TryGetActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    public bool TryGetActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>
     {
         if (dirtyActors.TryGetValue(id, out var uncastActor))
         {
@@ -269,7 +266,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
 
         if (parent.TryGetActor(id, out actor))
         {
-            dirtyActors[id] = actor;
+            dirtyActors[id] = actor.Clone();
             return true;
         }
 
@@ -287,7 +284,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
 
         if (parent.TryGetActor(id, out actor))
         {
-            dirtyActors[id] = actor;
+            dirtyActors[id] = actor.Clone();
             return true;
         }
 
@@ -305,12 +302,12 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * new actors added are wholly new and not used anywhere else, meaning they need to be cloned to be isolated.
      * </remarks>
      */
-    public void AddActor<T>(in T actor) where T : struct, ITypedActor<T>
+    public void AddActor<T>(in T actor) where T : ITypedActor<T>
     {
-        dirtyActors.Add(actor.Id, actor);
+        dirtyActors.Add(actor.Id, actor.Clone());
     }
 
-    public T RemoveActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>
+    public T RemoveActor<T>(ActorId<T> id) where T : ITypedActor<T>
     {
         if (TryRemoveActor(id, out var actor))
         {
@@ -320,7 +317,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
         throw new KeyNotFoundException();
     }
 
-    public bool TryRemoveActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>
+    public bool TryRemoveActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>
     {
         if (TryGetActor(id, out actor))
         {

@@ -7,7 +7,7 @@ namespace MultiplayerModel.Rpc.Observables;
  * and <see cref="T"/> observer.
  */
 internal sealed class IdAndTypedActorObserver<T>(IObserver<(ActorId<T>, T?)> observer)
-    : IObserver<(TypelessActorId, IActor?)> where T : struct, ITypedActor<T>
+    : IObserver<(TypelessActorId, IActor?)> where T : ITypedActor<T>
 {
     public void OnCompleted() => observer.OnCompleted();
 
@@ -18,7 +18,7 @@ internal sealed class IdAndTypedActorObserver<T>(IObserver<(ActorId<T>, T?)> obs
         switch (value)
         {
             case (var id, null):
-                observer.OnNext((new ActorId<T>(id.ContainerId, id.LocalId), null));
+                observer.OnNext((new ActorId<T>(id.ContainerId, id.LocalId), default));
                 break;
             case (var id, T typed):
                 observer.OnNext((new ActorId<T>(id.ContainerId, id.LocalId), typed));

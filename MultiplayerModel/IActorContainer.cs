@@ -28,7 +28,7 @@ public interface IActorContainer
      * </remarks>
      */
     public T? SendMessage<T, TMessage>(ActorId<T> actorId, TMessage message)
-        where T : struct, ITypedActor<T, TMessage> where TMessage : IMessage;
+        where T : ITypedActor<T, TMessage> where TMessage : IMessage;
 
     /**
      * <summary>Sends a message to the actor with the corresponding <paramref name="actorId"/>.</summary>
@@ -47,9 +47,9 @@ public interface IActorContainer
     public IActor? SendMessage(TypelessActorId actorId, IMessage message);
 
     public IReadOnlySet<TypelessActorId> ListActors();
-    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : struct, ITypedActor<T>;
+    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : ITypedActor<T>;
 
-    public bool ContainsActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>;
+    public bool ContainsActor<T>(ActorId<T> id) where T : ITypedActor<T>;
     public bool ContainsActor(TypelessActorId id);
     
     /**
@@ -57,22 +57,22 @@ public interface IActorContainer
      * 
      * <exception cref="KeyNotFoundException">The <paramref name="id"/> was not found.</exception>
      */
-    public T GetActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>;
+    public T GetActor<T>(ActorId<T> id) where T : ITypedActor<T>;
     
     /**
      * Gets the actor with the corresponding <paramref name="id"/>.
      *
      * <returns>true if the actor with the corresponding <paramref name="id"/> is found, false otherwise.</returns>
      */
-    public bool TryGetActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>;
+    public bool TryGetActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>;
 
     /**
      * <remarks>Less stringently typed version of <see cref="TryGetActor{T}"/></remarks>
      */
     public bool TryGetActor(TypelessActorId id, [MaybeNullWhen(false)] out IActor actor);
     
-    public void AddActor<T>(in T actor) where T : struct, ITypedActor<T>;
+    public void AddActor<T>(in T actor) where T : ITypedActor<T>;
     
-    public T RemoveActor<T>(ActorId<T> id) where T : struct, ITypedActor<T>;
-    public bool TryRemoveActor<T>(ActorId<T> id, out T actor) where T : struct, ITypedActor<T>;
+    public T RemoveActor<T>(ActorId<T> id) where T : ITypedActor<T>;
+    public bool TryRemoveActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>;
 }

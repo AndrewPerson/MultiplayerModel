@@ -76,7 +76,7 @@ public sealed partial class ActorWatchRegistry : IDisposable
         return subscription;
     }
 
-    public IDisposable Subscribe<T>(IObserver<(TypelessActorId, IActor?)> observer) where T : struct, ITypedActor<T>
+    public IDisposable Subscribe<T>(IObserver<(TypelessActorId, IActor?)> observer) where T : ITypedActor<T>
     {
         var type = typeof(T);
         TypeWatchSubscription subscription;

@@ -36,7 +36,7 @@ public interface IRpcActorContainer : IActorContainer
      *
      * <seealso cref="Watch()"/>
      */
-    public IObservable<T?> Watch<T>(ActorId<T> id) where T : struct, ITypedActor<T>;
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : ITypedActor<T>;
     
     /**
      * <summary>Watches all actors of type <typeparamref name="T"/> for changes.</summary>
@@ -54,5 +54,5 @@ public interface IRpcActorContainer : IActorContainer
      *
      * <seealso cref="Watch{T}(ActorId{T})"/>
      */
-    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : struct, ITypedActor<T>;
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : ITypedActor<T>;
 }

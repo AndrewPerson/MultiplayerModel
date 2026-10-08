@@ -6,7 +6,7 @@ namespace MultiplayerModel.Rpc.Observables;
  * Adapts an untyped <see cref="IActor"/> watch to a typed <see cref="T"/> observer.
  */
 internal sealed class TypedActorObserver<T>(IObserver<T?> observer) : IObserver<IActor?>
-    where T : struct, ITypedActor<T>
+    where T : ITypedActor<T>
 {
     public void OnCompleted() => observer.OnCompleted();
 
@@ -17,7 +17,7 @@ internal sealed class TypedActorObserver<T>(IObserver<T?> observer) : IObserver<
         switch (value)
         {
             case null:
-                observer.OnNext(null);
+                observer.OnNext(default);
                 break;
             case T typed:
                 observer.OnNext(typed);

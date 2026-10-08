@@ -9,9 +9,7 @@ public interface IActorId
     public ulong LocalId { get; }
 }
 
-public interface IActorId<out T> : IActorId where T : IActor;
-
-public readonly record struct ActorId<T>(uint ContainerId, ulong LocalId) : IActorId<T> where T : IActor
+public readonly record struct ActorId<T>(uint ContainerId, ulong LocalId) : IActorId where T : IActor
 {
     public static implicit operator TypelessActorId(ActorId<T> self)
     {

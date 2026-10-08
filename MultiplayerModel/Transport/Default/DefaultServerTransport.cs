@@ -226,8 +226,13 @@ public class DefaultServerTransport : IServerTransport
         );
     }
 
-    private async Task Actor(HttpListenerContext context, string containerIdString, string localIdString,
-        CancellationToken cancellationToken)
+    private async Task Actor
+    (
+        HttpListenerContext context,
+        string containerIdString,
+        string localIdString,
+        CancellationToken cancellationToken
+    )
     {
         if (!ValidId(context, out _))
         {

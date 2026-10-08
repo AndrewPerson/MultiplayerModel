@@ -9,5 +9,5 @@ public interface IMessage
      * implementation. If the actor does not implement the correct <see cref="IActor{TMessage}"/>
      * interface, do nothing.
      */
-    public IActor TryDispatch(IActorContainer container, IActor actor);
+    public void TryDispatch(IActorContainer container, IActor actor);
 }
