@@ -149,14 +149,14 @@ public class DefaultServerTransport : IServerTransport
 
         context.Response.Headers["Access-Control-Allow-Origin"] = "*";
 
-        var messageOrderings = new BufferBlock<MessageOrdering>();
+        var messageOrderings = new BufferBlock<ReadOnlyMemory<byte>>();
         var messageOrderingConnection = new MessageOrderingSseConnection(
             messageOrderings,
             SseFormatter.WriteAsync
             (
                 messageOrderings
                     .ReceiveAllAsync(runningCanceller?.Token ?? CancellationToken.None)
-                    .Select(o => new SseItem<MessageOrdering>(o)),
+                    .Select(json => new SseItem<ReadOnlyMemory<byte>>(json)),
                 context.Response.OutputStream,
                 WriteMessageOrderingSse,
                 runningCanceller?.Token ?? CancellationToken.None
@@ -182,10 +182,21 @@ public class DefaultServerTransport : IServerTransport
         }
     }
 
-    private void WriteMessageOrderingSse(SseItem<MessageOrdering> item, IBufferWriter<byte> writer)
+    /**
+     * The json has already been produced by <see cref="SendMessageOrdering"/>, this only copies it into the SSE
+     * frame (which is the only per connection work left to do).
+     *
+     * <remarks>
+     * Only the <i>data</i> of the <see cref="SseItem{T}"/> is written here, the <c>data:</c> framing is added by
+     * <see cref="SseFormatter"/>, so the payload must not contain new lines — serialising without
+     * <see cref="JsonSerializerOptions.WriteIndented"/> keeps it a single line.
+     * </remarks>
+     */
+    private static void WriteMessageOrderingSse(SseItem<ReadOnlyMemory<byte>> item, IBufferWriter<byte> writer)
     {
-        var json = JsonSerializer.SerializeToUtf8Bytes(item.Data, messageSerialisationOptions);
-        writer.Write(json);
+        var destination = writer.GetSpan(item.Data.Length);
+        item.Data.Span.CopyTo(destination);
+        writer.Advance(item.Data.Length);
     }
 
     private void NewId(HttpListenerContext context)
@@ -405,13 +416,24 @@ public class DefaultServerTransport : IServerTransport
         CancellationToken cancellationToken = default
     )
     {
+        if (messageOrderingConnections.IsEmpty)
+        {
+            // Nobody to tell, so don't bother paying for the serialisation
+            return Task.CompletedTask;
+        }
+
         var ordering = new MessageOrdering(messages, actorHashes, version);
+
+        // Every connection gets sent the exact same thing, so the json is built once and the (read only) bytes are
+        // shared between them — it used to be serialised once per connection, per ordering.
+        ReadOnlyMemory<byte> json = JsonSerializer.SerializeToUtf8Bytes(ordering, messageSerialisationOptions);
+
         foreach (var connection in messageOrderingConnections.Values)
         {
-            connection.MessageOrderings.Post(ordering);
+            connection.MessageOrderings.Post(json);
         }
         
-        logger.LogDebug("Sent message ordering {ordering}", ordering);
+        logger.LogDebug("Sent message ordering {ordering} ({bytes} bytes to {clients} clients)", ordering, json.Length, messageOrderingConnections.Count);
 
         return Task.CompletedTask;
     }
@@ -428,5 +450,11 @@ public class DefaultServerTransport : IServerTransport
         }
     }
 
-    private record MessageOrderingSseConnection(BufferBlock<MessageOrdering> MessageOrderings, Task SseWritingTask);
+    /**
+     * <param name="MessageOrderings">
+     * Pre serialised json payloads, shared with (and only ever written by) <see cref="SendMessageOrdering"/>. Safe to
+     * share because nothing downstream mutates it.
+     * </param>
+     */
+    private record MessageOrderingSseConnection(BufferBlock<ReadOnlyMemory<byte>> MessageOrderings, Task SseWritingTask);
 }
