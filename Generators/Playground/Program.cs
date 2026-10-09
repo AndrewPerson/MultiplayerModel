@@ -80,7 +80,7 @@ actor = actor
     .ChangeName(serverContainer, new("Andrew 2"))
     .Greet(serverContainer);
 
-Console.WriteLine(serverContainer.GetActor(actor.Id) == actor);
+Console.WriteLine(serverContainer.GetActor(actor.Id).Name == actor.Name);
 
 Console.ReadKey();
 Console.WriteLine("-------");

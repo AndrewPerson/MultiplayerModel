@@ -6,7 +6,6 @@ namespace MultiplayerModel.Generators.Actor;
 public readonly record struct MessageHandlerMethod(
     StringyType ContainingType,
     StringyType? ExtensionType,
-    bool IsRecordType,
     string MethodName,
     string? MessageSerialisationBaseKey,
     ImmutableEquatableArray<MessageHandlerParameter> Parameters

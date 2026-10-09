@@ -69,7 +69,6 @@ public class ActorGenerator : IIncrementalGenerator
                         (
                             new(realContainingType),
                             new(containingType),
-                            realContainingType.IsRecord,
                             methodSymbol.Name,
                             messageSerialisationBaseKey,
                             parameters
@@ -81,7 +80,6 @@ public class ActorGenerator : IIncrementalGenerator
                         (
                             new(containingType),
                             null,
-                            containingType.IsRecord,
                             methodSymbol.Name,
                             messageSerialisationBaseKey,
                             parameters
@@ -96,10 +94,9 @@ public class ActorGenerator : IIncrementalGenerator
             .ForAttributeWithMetadataName<ActorSerialisation>
             (
                 typeof(ActorSerialisationMixinAttribute).FullName!,
-                static (node, _) => node is StructDeclarationSyntax || node is RecordDeclarationSyntax,
+                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax,
                 static (context, _) => new(
                     new((ITypeSymbol)context.TargetSymbol),
-                    ((ITypeSymbol)context.TargetSymbol).IsRecord,
                     (string)context.TargetSymbol
                         .GetAttributes<ActorSerialisationMixinAttribute>()
                         .First()

@@ -207,7 +207,6 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
         if (TryGetActor(actorId, out var actor))
         {
             message.TryDispatch(this, actor);
-            
             appliedMessages.Add((actorId, message));
 
             return actor.Clone();
@@ -264,9 +263,12 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
             }
         }
 
-        if (parent.TryGetActor(id, out actor))
+        if (parent.TryGetActor(id, out var parentActor))
         {
-            dirtyActors[id] = actor.Clone();
+            // Store the exact instance that is handed out, so that mutating it (which is how messages are
+            // applied) is the change that gets tracked, while staying isolated from <see cref="parent"/>.
+            actor = parentActor.Clone();
+            dirtyActors[id] = actor;
             return true;
         }
 
@@ -282,9 +284,11 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
             return actor is not null;
         }
 
-        if (parent.TryGetActor(id, out actor))
+        if (parent.TryGetActor(id, out var parentActor))
         {
-            dirtyActors[id] = actor.Clone();
+            // See the note in the typed overload.
+            actor = parentActor.Clone();
+            dirtyActors[id] = actor;
             return true;
         }
 

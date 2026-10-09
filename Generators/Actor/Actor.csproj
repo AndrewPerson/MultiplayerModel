@@ -13,7 +13,7 @@
 
     <PropertyGroup>
         <PackageId>MultiplayerModel.Generators.Actor</PackageId>
-        <Version>0.0.46</Version>
+        <Version>0.0.53</Version>
         <Authors>AP2</Authors>
         <PackageProjectURL>https://github.com/AndrewPerson/MultiplayerModel</PackageProjectURL>
         <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -23,9 +23,9 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="AP2.SourceGenUtils" Version="0.0.20" />
+        <PackageReference Include="AP2.SourceGenUtils" Version="0.0.21" PrivateAssets="all" GeneratePathProperty="true" />
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-        <None Include="$(PkgSourceGenUtils)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
+        <None Include="$(PkgAP2_SourceGenUtils)\lib\netstandard2.0\*.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
     </ItemGroup>
 
     <ItemGroup>

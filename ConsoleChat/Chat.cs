@@ -8,37 +8,47 @@ public readonly record struct Message(string Username, string Text);
 
 [ActorSerialisationMixin("chat")]
 [MessageSerialisationMixin("chat")]
-public readonly partial record struct Chat(
-    ActorId<Chat> Id,
-    ImmutableList<Message> Messages,
-    ImmutableDictionary<string, uint> ClientUsernames
-)
+public partial class Chat(ActorId<Chat> id, Chat.State_ state) : ITypedActor<Chat>
 {
-    [MessageHandler]
-    public Chat Join([MessageId] MessageId messageId, string username)
-    {
-        if (ClientUsernames.ContainsValue(messageId.ContainerId))
-        {
-            throw new InvalidOperationException();
-        }
-
-        return this with { ClientUsernames = ClientUsernames.Add(username, messageId.ContainerId) };
-    }
+    public ActorId<Chat> Id { get; } = id;
+    public State_ State { get; private set; } = state;
     
+    public readonly record struct State_
+    (
+        ImmutableList<Message> Messages,
+        ImmutableDictionary<string, uint> ClientUsernames
+    );
+
     [MessageHandler]
-    public Chat SendMessage([MessageId] MessageId messageId, Message message)
+    public void Join([MessageId] MessageId messageId, string username)
     {
-        if (messageId.ContainerId != ClientUsernames[message.Username])
+        if (State.ClientUsernames.ContainsValue(messageId.ContainerId))
         {
             throw new InvalidOperationException();
         }
 
-        return this with { Messages = Messages.Add(message) };
+        State = State with { ClientUsernames = State.ClientUsernames.Add(username, messageId.ContainerId) };
+    }
+
+    [MessageHandler]
+    public void SendMessage([MessageId] MessageId messageId, Message message)
+    {
+        if (messageId.ContainerId != State.ClientUsernames[message.Username])
+        {
+            throw new InvalidOperationException();
+        }
+
+        State = State with { Messages = State.Messages.Add(message) };
+    }
+
+    public Chat Clone()
+    {
+        return new Chat(Id, State);
     }
 
     public override string ToString()
     {
-        return $"Chat {{ Id = {Id}, Messages = [{string.Join(", ", Messages.Select(m => m.ToString()))}], ClientUsernames = {ClientUsernames} }}";
+        return $"Chat {{ Id = {Id}, Messages = [{string.Join(", ", State.Messages.Select(m => m.ToString()))}], ClientUsernames = {State.ClientUsernames} }}";
     }
 
     public int StableHash()

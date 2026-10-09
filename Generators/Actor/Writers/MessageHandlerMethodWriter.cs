@@ -35,9 +35,16 @@ public static class MessageHandlerMethodWriter
             writer.WriteLine();
         }
 
-        writer.WriteLine(method.IsRecordType
-            ? $"public partial record struct {method.ContainingType.Type} : {methodIActorType}"
-            : $"public partial struct {method.ContainingType.Type} : {methodIActorType}");
+        var declaration = method.ContainingType.ObjectType switch
+        {
+            ObjectType.Class => "class",
+            ObjectType.Struct => "struct",
+            ObjectType.RecordClass => "record class",
+            ObjectType.RecordStruct => "record struct",
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        writer.WriteLine($"public partial {declaration} {method.ContainingType.Type} : {methodIActorType}");
 
         using (writer.WriteBlock("{", "}"))
         {
@@ -57,18 +64,13 @@ public static class MessageHandlerMethodWriter
 
             using (writer.WriteBlock("{", "}"))
             {
-                writer.WriteLine($"public {Types.IActorType} TryDispatch({Types.IActorContainerType} actorContainer, {Types.IActorType} actor)");
+                writer.WriteLine($"public void TryDispatch({Types.IActorContainerType} actorContainer, {Types.IActorType} actor)");
                 using (writer.WriteBlock("{", "}"))
                 {
                     writer.WriteLine($"if (actor is {methodIActorType} castActor)");
                     using (writer.WriteBlock("{", "}"))
                     {
-                        writer.WriteLine("return castActor.ProcessMessage(actorContainer, ref this);");
-                    }
-                    writer.WriteLine("else");
-                    using (writer.WriteBlock("{", "}"))
-                    {
-                        writer.WriteLine("return actor;");
+                        writer.WriteLine("castActor.ProcessMessage(actorContainer, ref this);");
                     }
                 }
 
@@ -86,13 +88,15 @@ public static class MessageHandlerMethodWriter
 
             writer.WriteLine();
 
-            writer.WriteLine($"{method.ContainingType} {methodIActorType}.ProcessMessage({Types.IActorContainerType} actorContainer, ref {messageType} message)");
+            // The explicit implementation has to name the interface that actually declares ProcessMessage
+            // (IActor<TMessage>), not ITypedActor<TSelf, TMessage>, or the compiler refuses to bind it.
+            writer.WriteLine($"void {Types.MethodIActorMessage(method)}.ProcessMessage({Types.IActorContainerType} actorContainer, ref {messageType} message)");
             using (writer.WriteBlock("{", "}"))
             {
                 writer.WriteLine(method.ExtensionType switch
                 {
-                    null => $"return this.{method.MethodName}",
-                    var extensionType => $"return {extensionType}.{method.MethodName}",
+                    null => $"this.{method.MethodName}",
+                    var extensionType => $"{extensionType}.{method.MethodName}",
                 });
 
                 using (writer.WriteBlock("(", ");"))

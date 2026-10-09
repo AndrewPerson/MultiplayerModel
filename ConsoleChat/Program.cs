@@ -61,11 +61,14 @@ if (host)
     );
 
     actorContainer = new RpcServerActorContainer(serverTransport);
-    
-    actorContainer.AddActor(new Chat(
+
+    actorContainer.AddActor(new Chat
+    (
         actorContainer.ActorId<Chat>(),
-        ImmutableList<Message>.Empty, 
-        ImmutableDictionary<string, uint>.Empty
+        new(
+            ImmutableList<Message>.Empty,
+            ImmutableDictionary<string, uint>.Empty
+        )
     ));
 }
 else
@@ -100,11 +103,8 @@ if (host)
 else
 {
     Console.WriteLine("Starting watch");
-    chat = (await actorContainer.Watch<Chat>().FirstAsync()).Item2!.Value;
+    chat = (await actorContainer.Watch<Chat>().FirstAsync()).Item2!;
 }
-
-// await Task.Delay(1000);
-// var chat = actorContainer.GetActor(actorContainer.ListActors<Chat>().First());
 
 Console.Write("Username: ");
 var username = Console.ReadLine()!;
@@ -121,7 +121,7 @@ actorContainer.Watch(chat.Id).Subscribe(c =>
     using (consoleLock.EnterWaitScope())
     {
         Console.Clear();
-        foreach (var chatMessage in c.Value.Messages.TakeLast(10))
+        foreach (var chatMessage in c.State.Messages.TakeLast(10))
         {
             Console.WriteLine($"{chatMessage.Username}: {chatMessage.Text}");
         }

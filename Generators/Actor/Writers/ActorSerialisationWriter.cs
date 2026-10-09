@@ -12,9 +12,16 @@ public static class ActorSerialisationWriter
             writer.WriteLine();
         }
 
-        writer.WriteLine(actor.IsRecordType
-            ? $"public partial record struct {actor.ActorType.Type}"
-            : $"public partial struct {actor.ActorType.Type}");
+        var declaration = actor.ActorType.ObjectType switch
+        {
+            ObjectType.Class => "class",
+            ObjectType.Struct => "struct",
+            ObjectType.RecordClass => "record class",
+            ObjectType.RecordStruct => "record struct",
+            _ => throw new ArgumentOutOfRangeException()
+        };
+
+        writer.WriteLine($"public partial {declaration} {actor.ActorType.Type}");
         using (writer.WriteBlock("{", "}"))
         {
             writer.WriteLine($"[{Types.ModuleInitializerAttributeType}]");
