@@ -6,6 +6,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Version>2.0.0</Version>
+    <Title>MultiplayerModel</Title>
+    <Authors>AP22</Authors>
+    <PackageProjectUrl>https://github.com/AndrewPerson/MultiplayerModel</PackageProjectUrl>
+    <PackageLicenseUrl>https://github.com/AndrewPerson/MultiplayerModel/LICENSE</PackageLicenseUrl>
+    <RepositoryUrl>https://github.com/AndrewPerson/MultiplayerModel</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
 
 <!--  <ItemGroup>-->
