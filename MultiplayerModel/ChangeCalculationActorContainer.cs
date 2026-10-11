@@ -87,6 +87,22 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     }
 
     /**
+     * <remarks>Deliberately not implemented because actors watching other actors is too complicated</remarks>
+     */
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : ITypedActor<T>
+    {
+        throw new InvalidOperationException("Actors cannot watch other actors.");
+    }
+
+    /**
+     * <remarks>Deliberately not implemented because actors watching other actors is too complicated</remarks>
+     */
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : ITypedActor<T>
+    {
+        throw new InvalidOperationException("Actors cannot watch other actors.");
+    }
+
+    /**
      * <inheritdoc/>
      *
      * <remarks>
@@ -180,8 +196,6 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     {
         if (TryGetActor(actorId, out var actor))
         {
-            
-            
             actor.ProcessMessage(this, ref message);
             appliedMessages.Add((actorId, message));
 

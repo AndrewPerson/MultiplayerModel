@@ -7,16 +7,16 @@ namespace MultiplayerModel;
 public interface IActorContainer
 {
     public uint Id { get; }
-    
+
     public IActorIdGenerator ActorIdGenerator { get; }
     public ISimpleActorIdGenerator SelfActorIdGenerator => ActorIdGenerator.MakeSimple(Id); 
-    
+
     public IMessageIdGenerator MessageIdGenerator { get; }
     public ISimpleMessageIdGenerator SelfMessageIdGenerator => MessageIdGenerator.MakeSimple(Id);
 
     public ActorId<T> ActorId<T>() where T : IActor => SelfActorIdGenerator.Generate<T>();
     public MessageId MessageId() => SelfMessageIdGenerator.Generate();
-    
+
     /**
      * <summary>Sends a message to the actor with the corresponding <paramref name="actorId"/>.</summary>
      *
@@ -46,19 +46,57 @@ public interface IActorContainer
      */
     public IActor? SendMessage(TypelessActorId actorId, IMessage message);
 
+    /**
+     * <summary>Watches the actor with the corresponding <paramref name="id"/> for changes.</summary>
+     *
+     * <remarks>
+     * Emits the actor's current value upon subscription (if it exists), then emits the new value each time the actor
+     * changes, and <c>null</c> when the actor is removed.
+     * <br/>
+     * The subscription stays alive after removal, so if the actor is re-added its value will be emitted again.
+     * <br/>
+     * Changes are batched: at most one value is emitted per actor per change batch (i.e. one applied message
+     * ordering on a client, or one local change on a server), although the same value may be emitted more than once.
+     * <br/>
+     * Values are emitted on the thread that applied the change, so observers may be called from arbitrary threads and
+     * are responsible for marshalling if needed.
+     * </remarks>
+     *
+     * <seealso cref="Watch()"/>
+     */
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : ITypedActor<T>;
+
+    /**
+     * <summary>Watches all actors of type <typeparamref name="T"/> for changes.</summary>
+     *
+     * <remarks>
+     * Emits the value and id of any actor of type <typeparamref name="T"/> that changes (or is removed, in which case
+     * the value is null). Nothing is emitted upon subscribing.
+     * <br/>
+     * Changes are batched: at most one value is emitted per actor per change batch (i.e. one applied message
+     * ordering on a client, or one local change on a server), although the same value may be emitted more than once.
+     * <br/>
+     * Values are emitted on the thread that applied the change, so observers may be called from arbitrary threads and
+     * are responsible for marshalling if needed.
+     * </remarks>
+     *
+     * <seealso cref="Watch{T}(ActorId{T})"/>
+     */
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : ITypedActor<T>;
+
     public IReadOnlySet<TypelessActorId> ListActors();
     public IReadOnlySet<ActorId<T>> ListActors<T>() where T : ITypedActor<T>;
 
     public bool ContainsActor<T>(ActorId<T> id) where T : ITypedActor<T>;
     public bool ContainsActor(TypelessActorId id);
-    
+
     /**
      * Gets the actor with the corresponding <paramref name="id"/>.
      * 
      * <exception cref="KeyNotFoundException">The <paramref name="id"/> was not found.</exception>
      */
     public T GetActor<T>(ActorId<T> id) where T : ITypedActor<T>;
-    
+
     /**
      * Gets the actor with the corresponding <paramref name="id"/>.
      *
@@ -70,9 +108,9 @@ public interface IActorContainer
      * <remarks>Less stringently typed version of <see cref="TryGetActor{T}"/></remarks>
      */
     public bool TryGetActor(TypelessActorId id, [MaybeNullWhen(false)] out IActor actor);
-    
+
     public void AddActor<T>(in T actor) where T : ITypedActor<T>;
-    
+
     public T RemoveActor<T>(ActorId<T> id) where T : ITypedActor<T>;
     public bool TryRemoveActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>;
 }
