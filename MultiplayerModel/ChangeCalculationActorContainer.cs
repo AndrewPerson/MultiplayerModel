@@ -17,7 +17,7 @@ namespace MultiplayerModel;
  */
 public class ChangeCalculationActorContainer(IActorContainer parent) : IActorContainer
 {
-    public uint Id => parent.Id;
+    public uint Id { get; private set; } = parent.Id;
 
     public IActorIdGenerator ActorIdGenerator { get; private set; } = parent.ActorIdGenerator.Clone();
     public IMessageIdGenerator MessageIdGenerator { get; private set; } = parent.MessageIdGenerator.Clone();
@@ -180,6 +180,8 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     {
         if (TryGetActor(actorId, out var actor))
         {
+            
+            
             actor.ProcessMessage(this, ref message);
             appliedMessages.Add((actorId, message));
 
@@ -206,8 +208,13 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     {
         if (TryGetActor(actorId, out var actor))
         {
+            var oldId = Id;
+            Id = message.Id.ContainerId;
+
             message.TryDispatch(this, actor);
             appliedMessages.Add((actorId, message));
+
+            Id = oldId;
 
             return actor.Clone();
         }
