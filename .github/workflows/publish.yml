@@ -27,4 +27,4 @@ jobs:
           user: ${{ secrets.NUGET_USER }}
 
       - name: NuGet push
-        run: dotnet nuget push Out/MultiplayerModel.*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicates
+        run: dotnet nuget push Out/MultiplayerModel.*.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
