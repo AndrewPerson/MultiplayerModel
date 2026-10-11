@@ -128,7 +128,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
         using (actorsLock.EnterWriteScope())
         {
-            newActor = unackedChangesContainer.SendMessage(actorId, ref message);
+            newActor = unackedChangesContainer.SendMessage(actorId, message);
             Transport.SendMessage(actorId, message).ConfigureAwait(true);
 
             if (newActor is not null)
@@ -403,7 +403,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
             for (int i = 0; i < ackedMessages.Count; i++)
             {
                 var (id, message) = ackedMessages[i];
-                ackedChangesContainer.SendMessage(id, ref message);
+                ackedChangesContainer.SendMessage(id, message);
 
                 unackedMessagesDict.Remove(message.Id);
             }
@@ -453,7 +453,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
             for (int i = 0; i < unackedMessages.Count; i++)
             {
                 var (id, message) = unackedMessages[i];
-                var newActor = unackedChangesContainer.SendMessage(id, ref message);
+                var newActor = unackedChangesContainer.SendMessage(id, message);
 
                 if (newActor is not null)
                 {

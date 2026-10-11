@@ -198,13 +198,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <seealso cref="DirtyActors"/>
      * <seealso cref="AppliedMessages"/>
      */
-    public IActor? SendMessage(TypelessActorId actorId, IMessage message) => SendMessage(actorId, ref message);
-
-    /**
-     * <seealso cref="DirtyActors"/>
-     * <seealso cref="AppliedMessages"/>
-     */
-    public IActor? SendMessage(TypelessActorId actorId, ref IMessage message)
+    public IActor? SendMessage(TypelessActorId actorId, IMessage message)
     {
         if (TryGetActor(actorId, out var actor))
         {
