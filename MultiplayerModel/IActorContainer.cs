@@ -64,7 +64,7 @@ public interface IActorContainer
      *
      * <seealso cref="Watch()"/>
      */
-    public IObservable<T?> Watch<T>(ActorId<T> id) where T : ITypedActor<T>;
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : IActor;
 
     /**
      * <summary>Watches all actors of type <typeparamref name="T"/> for changes.</summary>
@@ -82,12 +82,12 @@ public interface IActorContainer
      *
      * <seealso cref="Watch{T}(ActorId{T})"/>
      */
-    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : ITypedActor<T>;
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : IActor;
 
     public IReadOnlySet<TypelessActorId> ListActors();
-    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : ITypedActor<T>;
+    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : IActor;
 
-    public bool ContainsActor<T>(ActorId<T> id) where T : ITypedActor<T>;
+    public bool ContainsActor<T>(ActorId<T> id) where T : IActor;
     public bool ContainsActor(TypelessActorId id);
 
     /**

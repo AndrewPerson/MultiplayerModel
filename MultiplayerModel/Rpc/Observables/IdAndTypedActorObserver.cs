@@ -7,7 +7,7 @@ namespace MultiplayerModel.Rpc.Observables;
  * and <see cref="T"/> observer.
  */
 internal sealed class IdAndTypedActorObserver<T>(IObserver<(ActorId<T>, T?)> observer)
-    : IObserver<(TypelessActorId, IActor?)> where T : ITypedActor<T>
+    : IObserver<(TypelessActorId, IActor?)> where T : IActor
 {
     public void OnCompleted() => observer.OnCompleted();
 

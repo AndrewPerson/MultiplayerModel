@@ -163,7 +163,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         }
     }
 
-    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : ITypedActor<T>
+    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : IActor
     {
         using (actorsLock.EnterReadScope())
         {
@@ -182,7 +182,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         }
     }
 
-    public IObservable<T?> Watch<T>(ActorId<T> id) where T : ITypedActor<T>
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : IActor
     {
         TypelessActorId typelessId = id;
 
@@ -197,7 +197,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         });
     }
 
-    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : ITypedActor<T>
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : IActor
     {
         return new DelegateObservable<(ActorId<T>, T?)>(observer =>
         {
@@ -228,7 +228,7 @@ public class RpcServerActorContainer : IRpcActorContainer, IListActorsHandler, I
         return actors.GetValueOrDefault(id);
     }
 
-    public bool ContainsActor<T>(ActorId<T> id) where T : ITypedActor<T>
+    public bool ContainsActor<T>(ActorId<T> id) where T : IActor
     {
         using (actorsLock.EnterReadScope())
         {

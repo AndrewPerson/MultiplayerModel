@@ -76,7 +76,7 @@ public sealed partial class ActorWatchRegistry : IDisposable
         return subscription;
     }
 
-    public IDisposable Subscribe<T>(IObserver<(TypelessActorId, IActor?)> observer) where T : ITypedActor<T>
+    public IDisposable Subscribe<T>(IObserver<(TypelessActorId, IActor?)> observer) where T : IActor
     {
         var type = typeof(T);
         TypeWatchSubscription subscription;
@@ -89,11 +89,11 @@ public sealed partial class ActorWatchRegistry : IDisposable
 
             if (!typeEntries.TryGetValue(type, out var entry))
             {
-                entry = new TypeWatchEntry();
+                entry = new();
                 typeEntries[type] = entry;
             }
 
-            subscription = new TypeWatchSubscription(this, type, entry, observer);
+            subscription = new(this, type, entry, observer);
             entry.Subscriptions.Add(subscription);
         }
 

@@ -89,7 +89,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     /**
      * <remarks>Deliberately not implemented because actors watching other actors is too complicated</remarks>
      */
-    public IObservable<T?> Watch<T>(ActorId<T> id) where T : ITypedActor<T>
+    public IObservable<T?> Watch<T>(ActorId<T> id) where T : IActor
     {
         throw new InvalidOperationException("Actors cannot watch other actors.");
     }
@@ -97,7 +97,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
     /**
      * <remarks>Deliberately not implemented because actors watching other actors is too complicated</remarks>
      */
-    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : ITypedActor<T>
+    public IObservable<(ActorId<T>, T?)> Watch<T>() where T : IActor
     {
         throw new InvalidOperationException("Actors cannot watch other actors.");
     }
@@ -123,7 +123,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * implementation on <see cref="parent"/> doesn't call this as well.
      * </remarks>
      */
-    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : ITypedActor<T>
+    public IReadOnlySet<ActorId<T>> ListActors<T>() where T : IActor
     {
         return parent
             .ListActors<T>()
@@ -143,7 +143,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * implementation on <see cref="parent"/> doesn't call this as well.
      * </remarks>
      */
-    public bool ContainsActor<T>(ActorId<T> id) where T : ITypedActor<T>
+    public bool ContainsActor<T>(ActorId<T> id) where T : IActor
     {
         if (dirtyActors.TryGetValue(id, out var uncastActor))
         {
