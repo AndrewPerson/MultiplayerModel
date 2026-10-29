@@ -249,7 +249,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         }
     }
 
-    public T GetActor<T>(ActorId<T> id) where T : ITypedActor<T>
+    public T GetActor<T>(ActorId<T> id) where T : IActor
     {
         if (TryGetActor(id, out var actor))
         {
@@ -259,7 +259,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         throw new KeyNotFoundException();
     }
 
-    public bool TryGetActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>
+    public bool TryGetActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : IActor
     {
         using (var scope = actorsLock.EnterReadScope())
         {
@@ -287,14 +287,14 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
 
                 if (untypedUnackedActor is T typedUnackedActor)
                 {
-                    actor = typedUnackedActor.Clone();
+                    actor = (T)typedUnackedActor.Clone();
                     return true;
                 }
             }
 
             if (actors.TryGetValue(id, out var untypedActor) && untypedActor is T typedActor)
             {
-                actor = typedActor.Clone();
+                actor = (T)typedActor.Clone();
                 return true;
             }
         }
@@ -333,7 +333,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         return false;
     }
 
-    public void AddActor<T>(in T actor) where T : ITypedActor<T>
+    public void AddActor<T>(in T actor) where T : IActor
     {
         using (actorsLock.EnterWriteScope())
         {
@@ -346,7 +346,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         actorWatchRegistry.ReleaseChanges();
     }
 
-    public T RemoveActor<T>(ActorId<T> id) where T : ITypedActor<T>
+    public T RemoveActor<T>(ActorId<T> id) where T : IActor
     {
         if (TryRemoveActor(id, out var actor))
         {
@@ -356,7 +356,7 @@ public class RpcClientActorContainer : IRpcActorContainer, IDisposable
         throw new KeyNotFoundException();
     }
 
-    public bool TryRemoveActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>
+    public bool TryRemoveActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : IActor
     {
         bool removed = false;
 

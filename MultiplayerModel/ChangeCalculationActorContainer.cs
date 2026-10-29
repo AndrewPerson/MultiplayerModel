@@ -237,7 +237,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * <inheritdoc/>
      * <remarks>Forwards to <see cref="TryGetActor"/> under the hood</remarks>
      */
-    public T GetActor<T>(ActorId<T> id) where T : ITypedActor<T>
+    public T GetActor<T>(ActorId<T> id) where T : IActor
     {
         if (TryGetActor(id, out var actor))
         {
@@ -260,7 +260,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * This allows changes to actors to be tracked and also applied in isolation to the actors in <see cref="parent"/>
      * </remarks>
      */
-    public bool TryGetActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>
+    public bool TryGetActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : IActor
     {
         if (dirtyActors.TryGetValue(id, out var uncastActor))
         {
@@ -282,7 +282,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
         {
             // Store the exact instance that is handed out, so that mutating it (which is how messages are
             // applied) is the change that gets tracked, while staying isolated from <see cref="parent"/>.
-            actor = parentActor.Clone();
+            actor = (T)parentActor.Clone();
             dirtyActors[id] = actor;
             return true;
         }
@@ -321,12 +321,12 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
      * new actors added are wholly new and not used anywhere else, meaning they need to be cloned to be isolated.
      * </remarks>
      */
-    public void AddActor<T>(in T actor) where T : ITypedActor<T>
+    public void AddActor<T>(in T actor) where T : IActor
     {
         dirtyActors.Add(actor.Id, actor.Clone());
     }
 
-    public T RemoveActor<T>(ActorId<T> id) where T : ITypedActor<T>
+    public T RemoveActor<T>(ActorId<T> id) where T : IActor
     {
         if (TryRemoveActor(id, out var actor))
         {
@@ -336,7 +336,7 @@ public class ChangeCalculationActorContainer(IActorContainer parent) : IActorCon
         throw new KeyNotFoundException();
     }
 
-    public bool TryRemoveActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : ITypedActor<T>
+    public bool TryRemoveActor<T>(ActorId<T> id, [MaybeNullWhen(false)] out T actor) where T : IActor
     {
         if (TryGetActor(id, out actor))
         {
